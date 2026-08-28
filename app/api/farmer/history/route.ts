@@ -15,8 +15,11 @@ export async function GET() {
   const bookings = db
     .prepare(
       `SELECT b.id, b.token, b.status, b.quantity_quintal as quantityQuintal, b.actual_quantity as actualQuantity,
-              c.name as cropName, ctr.name as centreName, s.date, s.start_time as startTime,
-              p.status as paymentStatus, p.amount as paymentAmount
+              b.created_at as createdAt,
+              c.name as cropName, c.code as cropCode,
+              ctr.name as centreName, ctr.code as centreCode,
+              s.date, s.start_time as startTime, s.end_time as endTime,
+              p.status as paymentStatus, p.amount as paymentAmount, p.reference_no as paymentReference
        FROM bookings b
        JOIN crops c ON b.crop_id = c.id
        JOIN procurement_centres ctr ON b.centre_id = ctr.id
@@ -29,3 +32,4 @@ export async function GET() {
 
   return NextResponse.json({ bookings });
 }
+

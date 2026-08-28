@@ -3,24 +3,39 @@ import { getSession } from "@/lib/auth";
 import { getDb } from "@/lib/db";
 import { getStaffCentre } from "@/lib/staff";
 import { currentlyServingToken, centreLoad } from "@/lib/services";
+import { getTodayIST, normalizeDateToYMD } from "@/lib/format";
 
 export async function GET(req: NextRequest) {
   const session = await getSession();
-  if (!session || session.role !== "STAFF") {
-    return NextResponse.json({ error: "Please login as a staff member." }, { status: 401 });
+  if (!session || (session.role !== "STAFF" && session.role !== "ADMIN")) {
+    return NextResponse.json({ error: "Please login with a Staff account (e.g. 9100000002 for Centre 02)." }, { status: 401 });
   }
 
-  const centre = getStaffCentre(session.id);
+  const url = new URL(req.url);
+  const requestedCentreId = url.searchParams.get("centreId");
+  const requestedDate = url.searchParams.get("date");
+  const todayIST = getTodayIST();
+
+  const db = getDb();
+
+  let centre = getStaffCentre(session.id);
+  if (!centre && session.role === "ADMIN" && requestedCentreId) {
+    const row = db.prepare(`SELECT id, name, code FROM procurement_centres WHERE id = ?`).get(requestedCentreId) as any;
+    if (row) centre = row;
+  }
+  if (!centre && session.role === "ADMIN") {
+    const firstCentre = db.prepare(`SELECT id, name, code FROM procurement_centres ORDER BY code ASC LIMIT 1`).get() as any;
+    if (firstCentre) centre = firstCentre;
+  }
+
   if (!centre) {
     return NextResponse.json({ error: "No procurement centre assigned to this staff account." }, { status: 404 });
   }
 
-  const url = new URL(req.url);
-  const todayIST = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date());
-  const requestedDate = url.searchParams.get("date");
-
-  const db = getDb();
-
+  // Filter by date if requested (unless "all")
+  const activeDate = requestedDate === "all" ? "all" : normalizeDateToYMD(requestedDate || todayIST);
+  
+  const queryStart = Date.now();
   // Unified Query matching Admin Database Query
   const allRows = db
     .prepare(
@@ -44,14 +59,22 @@ export async function GET(req: NextRequest) {
        ORDER BY s.date ASC, COALESCE(q.position, 999) ASC, b.created_at ASC`
     )
     .all(centre.id) as any[];
+  const queryEnd = Date.now();
 
-  // Filter by date if requested (unless "all")
-  const activeDate = requestedDate === "all" ? "all" : (requestedDate || todayIST);
-  
-  // If user requested specific date, filter rows for that date; otherwise if "all", show all
+  // Normalized date comparison
   const filteredRows = activeDate === "all"
     ? allRows
-    : allRows.filter((r) => r.slotDate === activeDate);
+    : allRows.filter((r) => normalizeDateToYMD(r.slotDate) === activeDate);
+
+  console.log({
+    staffCentreId: centre.id,
+    staffCentreCode: centre.code,
+    selectedDate: activeDate,
+    queryStart,
+    queryEnd,
+    bookingsReceived: filteredRows.length,
+  });
+
 
   const summary = {
     total: filteredRows.length,
@@ -73,14 +96,22 @@ export async function GET(req: NextRequest) {
     )
     .all(centre.id) as { date: string; count: number }[];
 
+  const allCentres = db.prepare(`SELECT id, name, code FROM procurement_centres ORDER BY code ASC`).all();
+
   const serving = currentlyServingToken(centre.id, activeDate === "all" ? todayIST : activeDate);
   const load = centreLoad(centre.id, activeDate === "all" ? todayIST : activeDate);
 
+  const activeTotal = allRows.filter(
+    (r) => !["COMPLETED", "PROCUREMENT_COMPLETED", "PAYMENT_PROCESSING", "PAYMENT_COMPLETED", "CANCELLED", "NO_SHOW"].includes(r.status)
+  ).length;
+
   return NextResponse.json({
     centre,
+    allCentres,
     date: activeDate,
     todayIST,
     totalCentreBookings: allRows.length,
+    activeTotal,
     rows: filteredRows,
     summary,
     upcomingSummary,
@@ -88,3 +119,4 @@ export async function GET(req: NextRequest) {
     load,
   });
 }
+

@@ -5,7 +5,7 @@ import DashboardShell from "@/components/DashboardShell";
 import StatusBadge from "@/components/StatusBadge";
 import MetricCard, { MetricRow } from "@/components/MetricCard";
 import { CardSkeleton } from "@/components/Skeleton";
-import { formatCurrency, formatDate } from "@/lib/format";
+import { formatCurrency, formatDate, getTodayIST, normalizeDateToYMD } from "@/lib/format";
 import { useLanguage } from "@/lib/i18n/context";
 import {
   LayoutGrid,
@@ -37,12 +37,14 @@ export default function StaffDashboard() {
   const [showCompleted, setShowCompleted] = useState(false);
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [newBookingNotice, setNewBookingNotice] = useState<{ token: string; date?: string; centreId?: string } | null>(null);
 
   const eventSourceRef = useRef<EventSource | null>(null);
 
   const load = useCallback(
     async (isInitial = false, dateOverride?: string) => {
       if (isInitial) setLoading(true);
+      const queryStart = Date.now();
       try {
         const meRes = await fetch("/api/auth/me");
         if (meRes.ok) {
@@ -54,23 +56,34 @@ export default function StaffDashboard() {
         }
 
         const activeDate = dateOverride !== undefined ? dateOverride : selectedDate;
-        const targetUrl = activeDate ? `/api/staff/queue?date=${activeDate}` : "/api/staff/queue";
+        const targetUrl = activeDate ? `/api/staff/queue?date=${encodeURIComponent(activeDate)}` : "/api/staff/queue";
         const res = await fetch(targetUrl);
         const d = await res.json();
+        const queryEnd = Date.now();
         if (!res.ok) {
           if (res.status === 401) {
             setError("Please login with a Staff account (e.g. 9100000002 for Centre 02).");
           } else {
-            setError(d.error || "Unable to load centre queue data.");
+            setError(d.error || `Unable to load queue data: ${res.statusText}`);
           }
           return;
         }
+
+        console.log({
+          staffCentreId: d.centre?.id,
+          staffCentreCode: d.centre?.code,
+          selectedDate: activeDate || d.date,
+          queryStart,
+          queryEnd,
+          bookingsReceived: d.rows?.length,
+        });
+
         setData(d);
         if (!selectedDate && d.date && d.date !== "all") {
           setSelectedDate(d.date);
         }
         // If today is empty on initial load but upcoming dates have bookings, auto-switch
-        if (isInitial && !selectedDate && d.rows.length === 0 && d.upcomingSummary?.length > 0) {
+        if (isInitial && !selectedDate && d.rows?.length === 0 && d.upcomingSummary?.length > 0) {
           const firstActiveDate = d.upcomingSummary[0].date;
           setSelectedDate(firstActiveDate);
           load(false, firstActiveDate);
@@ -79,9 +92,7 @@ export default function StaffDashboard() {
         setError("");
       } catch (err: any) {
         console.error("[StaffQueue Error]", err);
-        if (isInitial) {
-          setError(err.message || "Failed to load queue.");
-        }
+        setError(err.message || "Failed to load queue.");
       } finally {
         if (isInitial) setLoading(false);
       }
@@ -100,6 +111,13 @@ export default function StaffDashboard() {
         try {
           const payload = JSON.parse(event.data);
           if (payload.type && payload.type !== "CONNECTED") {
+            if (payload.type === "BOOKING_CREATED" && payload.token) {
+              setNewBookingNotice({
+                token: payload.token,
+                date: payload.date,
+                centreId: payload.centreId,
+              });
+            }
             load(false);
           }
         } catch {}
@@ -117,6 +135,7 @@ export default function StaffDashboard() {
     };
   }, [load]);
 
+
   function handleDateChange(newDate: string) {
     setSelectedDate(newDate);
     load(false, newDate);
@@ -129,7 +148,7 @@ export default function StaffDashboard() {
       const res = await fetch("/api/staff/actions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "CALL_NEXT" }),
+        body: JSON.stringify({ action: "CALL_NEXT", date: selectedDate || data?.todayIST }),
       });
       const d = await res.json();
       if (!res.ok) {
@@ -172,7 +191,7 @@ export default function StaffDashboard() {
 
   const links = [{ href: "/staff", label: t("liveQueueTitle"), icon: LayoutGrid }];
 
-  if (loading && !data) {
+  if (loading && !data && !error) {
     return (
       <DashboardShell role="Staff" name="" links={links}>
         <div className="space-y-4">
@@ -183,13 +202,38 @@ export default function StaffDashboard() {
     );
   }
 
+  if (error && !data) {
+    return (
+      <DashboardShell role="Staff" name={me?.name || "Staff Member"} links={links}>
+        <div className="panel border-rose-200 bg-rose-50 p-6 text-center space-y-3 max-w-lg mx-auto mt-10">
+          <AlertTriangle size={32} className="mx-auto text-rose-600" />
+          <h2 className="font-bold text-rose-900 text-base">Unable to load queue data</h2>
+          <p className="text-xs text-rose-700">{error}</p>
+          <button onClick={() => load(true)} className="btn-primary !py-2 !px-4 text-xs font-bold mt-2">
+            Retry Loading Queue
+          </button>
+        </div>
+      </DashboardShell>
+    );
+  }
+
   const centre = data?.centre || { name: "Procurement Centre", code: "" };
   const rows = data?.rows || [];
   const summary = data?.summary || { total: 0, waiting: 0, inProgress: 0, completed: 0, paymentPending: 0 };
   const upcomingSummary = data?.upcomingSummary || [];
   const serving = data?.serving || null;
-  const todayIST = data?.todayIST || new Date().toISOString().slice(0, 10);
+  const todayIST = data?.todayIST || getTodayIST();
   const activeDate = selectedDate || data?.date || todayIST;
+
+  // Calculate tomorrow in IST
+  const [tY, tM, tD] = todayIST.split("-").map(Number);
+  const tomorrowObj = new Date(tY, tM - 1, tD, 12, 0, 0);
+  tomorrowObj.setDate(tomorrowObj.getDate() + 1);
+  const tomorrowIST = `${tomorrowObj.getFullYear()}-${String(tomorrowObj.getMonth() + 1).padStart(2, "0")}-${String(tomorrowObj.getDate()).padStart(2, "0")}`;
+
+  const todayCount = upcomingSummary.find((u: any) => u.date === todayIST)?.count || 0;
+  const tomorrowCount = upcomingSummary.find((u: any) => u.date === tomorrowIST)?.count || 0;
+  const totalUpcomingCount = upcomingSummary.reduce((acc: number, u: any) => acc + u.count, 0);
 
   const servingRow = rows.find((r: any) => r.token === serving);
   const nextUp = rows.filter((r: any) => r.status === "BOOKED").slice(0, 5);
@@ -254,20 +298,15 @@ export default function StaffDashboard() {
                   activeDate === todayIST ? "bg-white text-ink shadow-sm font-bold" : "text-ink-faint hover:text-ink"
                 }`}
               >
-                {t("today")}
+                {t("today")}{todayCount > 0 ? ` (${todayCount})` : ""}
               </button>
               <button
-                onClick={() => {
-                  const d = new Date();
-                  d.setDate(d.getDate() + 1);
-                  const tomorrow = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(d);
-                  handleDateChange(tomorrow);
-                }}
+                onClick={() => handleDateChange(tomorrowIST)}
                 className={`px-2.5 py-1 rounded-md transition-colors ${
-                  activeDate !== todayIST && activeDate !== "all" ? "bg-white text-ink shadow-sm font-bold" : "text-ink-faint hover:text-ink"
+                  activeDate === tomorrowIST ? "bg-white text-ink shadow-sm font-bold" : "text-ink-faint hover:text-ink"
                 }`}
               >
-                {t("tomorrowOrDate")}
+                {t("tomorrowOrDate")}{tomorrowCount > 0 ? ` (${tomorrowCount})` : ""}
               </button>
               <button
                 onClick={() => handleDateChange("all")}
@@ -275,7 +314,7 @@ export default function StaffDashboard() {
                   activeDate === "all" ? "bg-white text-ink shadow-sm font-bold" : "text-ink-faint hover:text-ink"
                 }`}
               >
-                {t("allDates")}
+                {t("allDates")}{totalUpcomingCount > 0 ? ` (${totalUpcomingCount})` : ""}
               </button>
               <input
                 type="date"
@@ -293,6 +332,38 @@ export default function StaffDashboard() {
             </button>
           </div>
         </div>
+
+
+        {/* Real-time New Booking Alert Banner */}
+        {newBookingNotice && (
+          <div className="panel bg-emerald-50 border-emerald-300 p-3.5 flex items-center justify-between gap-3 text-xs text-emerald-900 animate-rise-in">
+            <div className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping" />
+              <span>
+                <strong>New Live Booking:</strong> Token <strong className="font-mono text-emerald-800">{newBookingNotice.token}</strong> was just booked for {newBookingNotice.date ? formatDate(newBookingNotice.date) : "upcoming date"}!
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              {newBookingNotice.date && activeDate !== newBookingNotice.date && (
+                <button
+                  onClick={() => {
+                    handleDateChange(newBookingNotice.date!);
+                    setNewBookingNotice(null);
+                  }}
+                  className="btn-primary !py-1 !px-2.5 text-xs font-bold"
+                >
+                  Switch to {formatDate(newBookingNotice.date)}
+                </button>
+              )}
+              <button
+                onClick={() => setNewBookingNotice(null)}
+                className="text-xs text-emerald-700 hover:text-emerald-900 font-bold ml-1"
+              >
+                Dismiss
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Notice for bookings on other dates if current view is 0 */}
         {rows.length === 0 && otherUpcoming.length > 0 && (
@@ -315,6 +386,7 @@ export default function StaffDashboard() {
             </div>
           </div>
         )}
+
 
         {error && (
           <div className="panel border-rose-200 bg-rose-50/80 p-3.5 flex items-center justify-between gap-3 text-rose-800 text-xs animate-rise-in">

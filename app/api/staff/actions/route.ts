@@ -6,6 +6,8 @@ import { sendNotification, recordAudit } from "@/lib/services";
 import { staffActionSchema } from "@/lib/validation";
 import { broadcastRealtimeEvent } from "@/lib/realtime";
 
+import { getTodayIST, normalizeDateToYMD } from "@/lib/format";
+
 // Complete, robust state machine matching real mandi procurement workflow
 const TRANSITIONS: Record<string, string[]> = {
   MARK_ARRIVED: ["BOOKED", "NO_SHOW"],
@@ -42,21 +44,42 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null);
 
   const db = getDb();
-  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date());
+  const today = getTodayIST();
 
   if (body?.action === "CALL_NEXT") {
-    const next = db
-      .prepare(
-        `SELECT q.id as queueId, b.id as bookingId, b.token FROM queue_entries q JOIN bookings b ON q.booking_id = b.id
-         WHERE q.centre_id = ? AND q.date = ? AND q.called_at IS NULL AND b.status = 'BOOKED'
-         ORDER BY q.position ASC LIMIT 1`
-      )
-      .get(centre.id, today) as { queueId: string; bookingId: string; token: string } | undefined;
+    const targetDate = body?.date && body.date !== "all" ? normalizeDateToYMD(body.date) : null;
+    let next = targetDate
+      ? (db
+          .prepare(
+            `SELECT q.id as queueId, b.id as bookingId, b.token FROM queue_entries q JOIN bookings b ON q.booking_id = b.id
+             WHERE q.centre_id = ? AND q.date = ? AND q.called_at IS NULL AND b.status = 'BOOKED'
+             ORDER BY q.position ASC LIMIT 1`
+          )
+          .get(centre.id, targetDate) as { queueId: string; bookingId: string; token: string } | undefined)
+      : (db
+          .prepare(
+            `SELECT q.id as queueId, b.id as bookingId, b.token FROM queue_entries q JOIN bookings b ON q.booking_id = b.id
+             WHERE q.centre_id = ? AND q.date = ? AND q.called_at IS NULL AND b.status = 'BOOKED'
+             ORDER BY q.position ASC LIMIT 1`
+          )
+          .get(centre.id, today) as { queueId: string; bookingId: string; token: string } | undefined);
+
+    if (!next && !targetDate) {
+      // Fallback to earliest active booking at this centre if today's queue is empty
+      next = db
+        .prepare(
+          `SELECT q.id as queueId, b.id as bookingId, b.token FROM queue_entries q JOIN bookings b ON q.booking_id = b.id
+           WHERE q.centre_id = ? AND q.called_at IS NULL AND b.status = 'BOOKED'
+           ORDER BY q.date ASC, q.position ASC LIMIT 1`
+        )
+        .get(centre.id) as { queueId: string; bookingId: string; token: string } | undefined;
+    }
 
     if (!next) {
       return NextResponse.json({ error: "No more farmers waiting in the queue." }, { status: 409 });
     }
     db.prepare(`UPDATE queue_entries SET called_at = ? WHERE id = ?`).run(nowIso(), next.queueId);
+
 
     const farmerUser = db
       .prepare(

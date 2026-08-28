@@ -34,7 +34,10 @@ export default function FarmerHome() {
   const router = useRouter();
   const { lang, setLang, t } = useLanguage();
   const [me, setMe] = useState<Me | null>(null);
-  const [booking, setBooking] = useState<Booking | null>(null);
+  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [activeCount, setActiveCount] = useState(0);
+  const [maxLimit, setMaxLimit] = useState(3);
+  const [isMaxReached, setIsMaxReached] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -65,7 +68,7 @@ export default function FarmerHome() {
         setLang(meData.user.language);
       }
 
-      // 2. Fetch current active booking
+      // 2. Fetch current active bookings (up to 3)
       const bRes = await fetch("/api/farmer/current");
       if (!bRes.ok) {
         if (bRes.status === 401) {
@@ -75,7 +78,10 @@ export default function FarmerHome() {
         throw new Error("Failed to load booking information.");
       }
       const bData = await bRes.json();
-      setBooking(bData.booking ?? null);
+      setBookings(bData.bookings || (bData.booking ? [bData.booking] : []));
+      setActiveCount(bData.activeCount ?? (bData.bookings ? bData.bookings.length : (bData.booking ? 1 : 0)));
+      setMaxLimit(bData.maxLimit ?? 3);
+      setIsMaxReached(Boolean(bData.isMaxReached));
       setError(null);
     } catch (err: any) {
       console.error("[FarmerHome Error]", err);
@@ -138,8 +144,39 @@ export default function FarmerHome() {
         {/* LOADING STATE */}
         {loading && <CardSkeleton />}
 
+        {/* ACTIVE TOKENS SECTION HEADER & WARNING */}
+        {!loading && !error && bookings.length > 0 && (
+          <div className="flex items-center justify-between">
+            <h2 className="text-xs font-bold text-ink uppercase tracking-wider flex items-center gap-1.5">
+              <span>My Active Tokens</span>
+              <span className={`px-2 py-0.5 rounded-full text-[11px] font-mono font-bold ${
+                isMaxReached ? "bg-amber-100 text-amber-800" : "bg-brand-50 text-brand-700"
+              }`}>
+                {activeCount} / {maxLimit}
+              </span>
+            </h2>
+            {isMaxReached ? (
+              <span className="text-[11px] font-semibold text-amber-700">Max limit reached</span>
+            ) : (
+              <Link href="/farmer/book" className="text-xs font-bold text-brand-600 hover:text-brand-700 underline">
+                + Book Another ({maxLimit - activeCount} left)
+              </Link>
+            )}
+          </div>
+        )}
+
+        {/* MAX LIMIT REACHED BANNER */}
+        {!loading && !error && isMaxReached && (
+          <div className="panel border-amber-200 bg-amber-50 p-3.5 flex items-start gap-2.5 text-xs text-amber-900 animate-rise-in">
+            <AlertCircle size={16} className="text-amber-600 shrink-0 mt-0.5" />
+            <p className="leading-relaxed">
+              <strong>Maximum 3 active tokens reached.</strong> Please wait until one of your existing bookings is completed or cleared before booking another slot.
+            </p>
+          </div>
+        )}
+
         {/* SUCCESS STATE - NO ACTIVE BOOKING */}
-        {!loading && !error && booking === null && (
+        {!loading && !error && bookings.length === 0 && (
           <EmptyState
             icon={CalendarPlus}
             title={t("noActiveBooking")}
@@ -149,77 +186,89 @@ export default function FarmerHome() {
           />
         )}
 
-        {/* SUCCESS STATE - HAS ACTIVE BOOKING */}
-        {!loading && !error && booking !== null && (
-          <div className="panel relative overflow-hidden animate-rise-in">
-            {/* Subtle grain-stalk background SVG */}
-            <svg
-              className="absolute -right-6 -top-6 text-brand-50 pointer-events-none"
-              width="160"
-              height="160"
-              viewBox="0 0 160 160"
-              fill="none"
-            >
-              <path d="M40 140 C60 100 70 60 100 20" stroke="currentColor" strokeWidth="10" strokeLinecap="round" />
-              <path d="M60 120 C80 90 90 60 115 30" stroke="currentColor" strokeWidth="8" strokeLinecap="round" />
-            </svg>
+        {/* SUCCESS STATE - MULTIPLE ACTIVE BOOKINGS */}
+        {!loading && !error && bookings.length > 0 && (
+          <div className="space-y-4">
+            {bookings.map((b, idx) => (
+              <div key={b.id} className="panel relative overflow-hidden animate-rise-in">
+                <div className="p-5">
+                  <div className="flex items-center justify-between mb-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-ink-faint uppercase tracking-wide">
+                        Token #{idx + 1}
+                      </span>
+                      <span className="font-display font-black text-xl text-grain font-mono">
+                        {b.token}
+                      </span>
+                    </div>
+                    <StatusBadge status={b.status} />
+                  </div>
 
-            <div className="relative p-5">
-              <div className="flex items-center justify-between mb-1">
-                <p className="text-xs font-semibold text-ink-faint uppercase tracking-wide">
-                  {t("procurementJourney")}
-                </p>
-                <StatusBadge status={booking.status} />
-              </div>
-
-              <div className="flex items-center gap-1.5 text-sm text-ink-soft mt-2">
-                <Wheat size={14} className="text-brand-600" />
-                <span className="font-medium">{booking.cropName}</span>
-                <span className="tnum">· {booking.quantityQuintal} Quintal</span>
-              </div>
-              <div className="flex items-center gap-1.5 text-sm text-ink-soft mt-1">
-                <MapPin size={14} className="text-brand-600" />
-                <span>{booking.centreName}</span>
-              </div>
-              <p className="text-xs text-ink-faint mt-1">
-                {formatDate(booking.date)} · {booking.startTime} – {booking.endTime}
-              </p>
-
-              <div className="mt-4 pt-4 border-t border-line">
-                <QueueRail
-                  servingToken={booking.currentlyServing}
-                  farmersAhead={booking.farmersAhead}
-                  myToken={booking.token}
-                />
-              </div>
-
-              <div className="mt-2 grid grid-cols-2 gap-3 text-center">
-                <div className="bg-surface-sunken rounded-lg py-2.5">
-                  <p className="text-[11px] text-ink-faint">{t("estimatedWait")}</p>
-                  <p className="font-display font-bold text-ink tnum">{booking.estimatedWaitMins} min</p>
-                </div>
-                <div className="bg-surface-sunken rounded-lg py-2.5">
-                  <p className="text-[11px] text-ink-faint">{t("status")}</p>
-                  <p className="font-display font-bold text-brand-600 text-sm leading-tight mt-0.5">
-                    {booking.statusMessage || t("yourTurnApproaching")}
+                  <div className="flex items-center gap-1.5 text-sm text-ink-soft mt-2">
+                    <Wheat size={14} className="text-brand-600 shrink-0" />
+                    <span className="font-semibold text-ink">{b.cropName}</span>
+                    <span className="tnum">· {b.quantityQuintal} Quintal</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-sm text-ink-soft mt-1">
+                    <MapPin size={14} className="text-brand-600 shrink-0" />
+                    <span>{b.centreName}</span>
+                  </div>
+                  <p className="text-xs text-ink-faint mt-1">
+                    {formatDate(b.date)} · {b.startTime} – {b.endTime}
                   </p>
+
+                  <div className="mt-3.5 pt-3 border-t border-line">
+                    <QueueRail
+                      servingToken={b.currentlyServing}
+                      farmersAhead={b.farmersAhead}
+                      myToken={b.token}
+                    />
+                  </div>
+
+                  <div className="mt-2 grid grid-cols-2 gap-2 text-center text-xs">
+                    <div className="bg-surface-sunken rounded-lg py-2">
+                      <p className="text-[10px] text-ink-faint">{t("estimatedWait")}</p>
+                      <p className="font-display font-bold text-ink tnum">{b.estimatedWaitMins} min</p>
+                    </div>
+                    <div className="bg-surface-sunken rounded-lg py-2 px-1">
+                      <p className="text-[10px] text-ink-faint">{t("status")}</p>
+                      <p className="font-display font-bold text-brand-600 text-xs leading-tight truncate mt-0.5">
+                        {b.statusMessage || t("yourTurnApproaching")}
+                      </p>
+                    </div>
+                  </div>
+
+                  <Link href={`/farmer/queue?bookingId=${b.id}`} className="btn-primary w-full mt-3 !py-2 text-xs font-bold block text-center">
+                    {t("viewLiveQueue")} ({b.token})
+                  </Link>
                 </div>
               </div>
-
-              <Link href="/farmer/queue" className="btn-primary w-full mt-4">
-                {t("viewLiveQueue")}
-              </Link>
-            </div>
+            ))}
           </div>
         )}
 
-        <div className="grid grid-cols-2 gap-3">
-          <Link href="/farmer/book" className="card hover:border-brand-600/40 transition-colors">
-            <CalendarPlus className="text-brand-600 mb-2" size={20} />
-            <p className="font-semibold text-sm text-ink">{t("bookNewSlot")}</p>
-            <p className="text-xs text-ink-faint mt-0.5">{t("bookSlot")}</p>
-          </Link>
-          <Link href="/farmer/history" className="card hover:border-brand-600/40 transition-colors">
+        {/* QUICK ACTION TILES */}
+        <div className="grid grid-cols-2 gap-3 pt-2">
+          {isMaxReached ? (
+            <div className="card opacity-60 bg-surface-sunken border-line cursor-not-allowed select-none p-4">
+              <CalendarPlus className="text-ink-faint mb-2" size={20} />
+              <div className="flex items-center gap-1.5">
+                <p className="font-semibold text-sm text-ink-faint">{t("bookNewSlot")}</p>
+                <span className="text-[9px] font-bold bg-amber-100 text-amber-800 px-1 py-0.5 rounded">3/3</span>
+              </div>
+              <p className="text-[11px] text-ink-faint mt-0.5">Limit reached (Max 3)</p>
+            </div>
+          ) : (
+            <Link href="/farmer/book" className="card hover:border-brand-600/40 transition-colors p-4">
+              <CalendarPlus className="text-brand-600 mb-2" size={20} />
+              <p className="font-semibold text-sm text-ink">{t("bookNewSlot")}</p>
+              <p className="text-xs text-ink-faint mt-0.5">
+                {activeCount > 0 ? `${maxLimit - activeCount} slot(s) available` : t("bookSlot")}
+              </p>
+            </Link>
+          )}
+
+          <Link href="/farmer/history" className="card hover:border-brand-600/40 transition-colors p-4">
             <History className="text-brand-600 mb-2" size={20} />
             <p className="font-semibold text-sm text-ink">{t("myHistory")}</p>
             <p className="text-xs text-ink-faint mt-0.5">{t("history")}</p>
@@ -230,3 +279,4 @@ export default function FarmerHome() {
     </main>
   );
 }
+

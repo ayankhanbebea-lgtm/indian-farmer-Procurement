@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { getDb, newId, nowIso } from "@/lib/db";
-import { getFarmerProfileId } from "@/lib/farmer";
+import { getFarmerProfileId, MAX_ACTIVE_BOOKINGS, ACTIVE_BOOKING_STATUSES } from "@/lib/farmer";
 import { createBookingSchema } from "@/lib/validation";
 import { generateToken, nextQueuePosition, sendNotification, recordAudit } from "@/lib/services";
 import { broadcastRealtimeEvent } from "@/lib/realtime";
@@ -61,23 +61,42 @@ export async function POST(req: NextRequest) {
     | undefined;
   if (!slot) return NextResponse.json({ error: "Please select a valid slot." }, { status: 400 });
 
-  // Duplicate active booking at same centre + date
-  const duplicate = db
-    .prepare(
-      `SELECT b.id FROM bookings b JOIN slots s ON b.slot_id = s.id
-       WHERE b.farmer_id = ? AND b.centre_id = ? AND s.date = ?
-       AND b.status NOT IN ('CANCELLED','NO_SHOW','PAYMENT_COMPLETED','COMPLETED')`
-    )
-    .get(farmerId, centreId, date);
-  if (duplicate) {
-    return NextResponse.json(
-      { error: "You already have an active booking for this centre and date." },
-      { status: 409 }
-    );
-  }
-
   try {
     db.exec("BEGIN IMMEDIATE");
+
+    // Atomic Active Bookings Count Check (Maximum 3 active tokens)
+    const placeholders = ACTIVE_BOOKING_STATUSES.map(() => "?").join(",");
+    const activeCount = (
+      db
+        .prepare(`SELECT COUNT(*) as c FROM bookings WHERE farmer_id = ? AND status IN (${placeholders})`)
+        .get(farmerId, ...ACTIVE_BOOKING_STATUSES) as { c: number }
+    ).c;
+
+    if (activeCount >= MAX_ACTIVE_BOOKINGS) {
+      db.exec("ROLLBACK");
+      return NextResponse.json(
+        {
+          error: "You already have 3 active tokens. Please wait until one of your existing tokens is completed before booking another slot.",
+        },
+        { status: 409 }
+      );
+    }
+
+    // Duplicate active booking at same centre + date check
+    const duplicate = db
+      .prepare(
+        `SELECT b.id FROM bookings b JOIN slots s ON b.slot_id = s.id
+         WHERE b.farmer_id = ? AND b.centre_id = ? AND s.date = ?
+         AND b.status IN (${placeholders})`
+      )
+      .get(farmerId, centreId, date, ...ACTIVE_BOOKING_STATUSES);
+    if (duplicate) {
+      db.exec("ROLLBACK");
+      return NextResponse.json(
+        { error: "You already have an active booking for this centre and date." },
+        { status: 409 }
+      );
+    }
 
     // Atomic Slot capacity check inside immediate transaction
     const bookedCount = (
@@ -96,6 +115,7 @@ export async function POST(req: NextRequest) {
       `INSERT INTO bookings (id, farmer_id, centre_id, crop_id, slot_id, quantity_quintal, token, token_seq, status, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'BOOKED', ?, ?)`
     ).run(bookingId, farmerId, centreId, crop.id, slotId, quantityQuintal, token, seq, nowIso(), nowIso());
+
 
     const position = nextQueuePosition(centreId, date);
     db.prepare(

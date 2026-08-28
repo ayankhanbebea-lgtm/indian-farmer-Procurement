@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { getDb } from "@/lib/db";
 import { rankCentres, getSlotAvailability, ensureSlotsForDate } from "@/lib/services";
+import { getTodayIST, normalizeDateToYMD } from "@/lib/format";
 
 export async function GET(req: NextRequest) {
   const session = await getSession();
@@ -13,24 +14,29 @@ export async function GET(req: NextRequest) {
   const selectedDate = url.searchParams.get("date");
   const centreId = url.searchParams.get("centreId");
 
-  const todayDateObj = new Date();
-  const todayStr = todayDateObj.toISOString().slice(0, 10);
-  const date = selectedDate || todayStr;
+  const todayStr = getTodayIST();
+  const date = normalizeDateToYMD(selectedDate || todayStr);
 
   ensureSlotsForDate(date);
 
   const db = getDb();
   const crops = db.prepare(`SELECT id, name, code FROM crops ORDER BY name`).all();
 
-  // Generate 14-day booking window
+  // Generate 14-day booking window strictly aligned with IST calendar
   const validDates = [];
   const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
+  const [tYear, tMonth, tDay] = todayStr.split("-").map(Number);
+  const baseDate = new Date(tYear, tMonth - 1, tDay, 12, 0, 0);
+
   for (let i = 0; i < 14; i++) {
-    const d = new Date(todayDateObj);
-    d.setDate(d.getDate() + i);
-    const dStr = d.toISOString().slice(0, 10);
+    const d = new Date(baseDate);
+    d.setDate(baseDate.getDate() + i);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const dt = String(d.getDate()).padStart(2, "0");
+    const dStr = `${y}-${m}-${dt}`;
     ensureSlotsForDate(dStr);
 
     validDates.push({
@@ -63,3 +69,4 @@ export async function GET(req: NextRequest) {
     recommended,
   });
 }
+

@@ -1,4 +1,5 @@
 import { getDb, newId, nowIso } from "./db";
+import { getTodayIST, normalizeDateToYMD } from "./format";
 
 // Standard daily slots configured for each procurement centre
 const STANDARD_SLOT_WINDOWS = [
@@ -10,8 +11,10 @@ const STANDARD_SLOT_WINDOWS = [
 /**
  * Ensures standard slots exist in the database for all active centres on a given date.
  */
-export function ensureSlotsForDate(date: string) {
+export function ensureSlotsForDate(rawDate?: string) {
+  const date = normalizeDateToYMD(rawDate);
   const db = getDb();
+
   const centres = db.prepare(`SELECT id FROM procurement_centres`).all() as { id: string }[];
   
   for (const centre of centres) {
@@ -44,7 +47,8 @@ export function generateToken(cropCode: string, centreId?: string, date?: string
 }
 
 // ---------- Queue ----------
-export function nextQueuePosition(centreId: string, date: string): number {
+export function nextQueuePosition(centreId: string, rawDate?: string): number {
+  const date = normalizeDateToYMD(rawDate);
   const db = getDb();
   const row = db
     .prepare(`SELECT COALESCE(MAX(position), 0) as m FROM queue_entries WHERE centre_id = ? AND date = ?`)
@@ -52,7 +56,8 @@ export function nextQueuePosition(centreId: string, date: string): number {
   return row.m + 1;
 }
 
-export function farmersAhead(centreId: string, date: string, position: number): number {
+export function farmersAhead(centreId: string, rawDate: string, position: number): number {
+  const date = normalizeDateToYMD(rawDate);
   const db = getDb();
   // "Ahead" = queue entries on the same date with a lower position whose booking is still active
   // (i.e. not completed, cancelled, or marked no-show).
@@ -76,7 +81,8 @@ export function estimateWaitMinutes(centreId: string, farmersAheadCount: number)
   return Math.max(0, farmersAheadCount * avg);
 }
 
-export function currentlyServingToken(centreId: string, date: string): string | null {
+export function currentlyServingToken(centreId: string, rawDate?: string): string | null {
+  const date = normalizeDateToYMD(rawDate);
   const db = getDb();
   // 1. Prefer farmer actively being processed (WEIGHING, PROCUREMENT_IN_PROGRESS, VERIFIED, ARRIVED)
   const inProgress = db
@@ -110,9 +116,11 @@ export type CentreLoadInfo = {
   estimatedWaitMins: number;
 };
 
-export function centreLoad(centreId: string, date: string): CentreLoadInfo {
+export function centreLoad(centreId: string, rawDate?: string): CentreLoadInfo {
+  const date = normalizeDateToYMD(rawDate);
   const db = getDb();
   ensureSlotsForDate(date);
+
 
   const centre = db.prepare(`SELECT high_load_threshold, avg_service_time_mins, daily_capacity FROM procurement_centres WHERE id = ?`).get(centreId) as
     | { high_load_threshold: number; avg_service_time_mins: number; daily_capacity: number }
@@ -187,7 +195,8 @@ export type CentreOption = {
   estimatedWaitMins: number;
 };
 
-export function rankCentres(date: string): (CentreOption & { score: number; reason: string })[] {
+export function rankCentres(rawDate?: string): (CentreOption & { score: number; reason: string })[] {
+  const date = normalizeDateToYMD(rawDate);
   const db = getDb();
   ensureSlotsForDate(date);
 
@@ -239,7 +248,8 @@ export function rankCentres(date: string): (CentreOption & { score: number; reas
 /**
  * Returns available slots for a given centre and date with real calculated remaining capacities.
  */
-export function getSlotAvailability(centreId: string, date: string) {
+export function getSlotAvailability(centreId: string, rawDate?: string) {
+  const date = normalizeDateToYMD(rawDate);
   const db = getDb();
   ensureSlotsForDate(date);
 
@@ -308,8 +318,9 @@ export function adminOverview() {
   const totalFarmers = (db.prepare(`SELECT COUNT(*) as c FROM users WHERE role = 'FARMER'`).get() as { c: number }).c;
   const totalStaff = (db.prepare(`SELECT COUNT(*) as c FROM users WHERE role = 'STAFF'`).get() as { c: number }).c;
   const totalCentres = (db.prepare(`SELECT COUNT(*) as c FROM procurement_centres`).get() as { c: number }).c;
-  const today = new Date().toISOString().slice(0, 10);
+  const today = getTodayIST();
   ensureSlotsForDate(today);
+
 
   const todaysBookings = (
     db.prepare(`SELECT COUNT(*) as c FROM slots s JOIN bookings b ON b.slot_id = s.id WHERE s.date = ? AND b.status != 'CANCELLED'`).get(today) as {

@@ -1,14 +1,15 @@
-﻿import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { getDb, nowIso } from "@/lib/db";
 import { recordAudit, sendNotification } from "@/lib/services";
+import { normalizeDateToYMD } from "@/lib/format";
 
 export async function GET(req: NextRequest) {
   const session = await getSession();
   if (!session || session.role !== "ADMIN") return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const db = getDb();
   const url = new URL(req.url);
-  const date = url.searchParams.get("date") || "";
+  const rawDate = url.searchParams.get("date") || "";
   const centreId = url.searchParams.get("centreId") || "";
   const status = url.searchParams.get("status") || "";
   const page = parseInt(url.searchParams.get("page") || "1");
@@ -17,9 +18,10 @@ export async function GET(req: NextRequest) {
 
   const conditions: string[] = [];
   const vals: unknown[] = [];
-  if (date) { conditions.push("s.date = ?"); vals.push(date); }
+  if (rawDate) { conditions.push("s.date = ?"); vals.push(normalizeDateToYMD(rawDate)); }
   if (centreId) { conditions.push("b.centre_id = ?"); vals.push(centreId); }
   if (status) { conditions.push("b.status = ?"); vals.push(status); }
+
 
   const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
 

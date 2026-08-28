@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
 import FarmerTopBar from "@/components/FarmerTopBar";
 import FarmerNav from "@/components/FarmerNav";
 import StatusBadge from "@/components/StatusBadge";
@@ -8,12 +9,17 @@ import QueueRail from "@/components/QueueRail";
 import EmptyState from "@/components/EmptyState";
 import { CardSkeleton } from "@/components/Skeleton";
 import { formatDate } from "@/lib/format";
-import { ListOrdered, WifiOff, MapPin, Wheat, Clock, AlertCircle } from "lucide-react";
+import { ListOrdered, WifiOff, MapPin, Wheat, Clock, AlertCircle, RefreshCw } from "lucide-react";
 import { useLanguage } from "@/lib/i18n/context";
 
 export default function QueuePage() {
   const { t } = useLanguage();
-  const [booking, setBooking] = useState<any>(undefined);
+  const searchParams = useSearchParams();
+  const paramBookingId = searchParams.get("bookingId");
+
+  const [bookings, setBookings] = useState<any[]>([]);
+  const [selectedId, setSelectedId] = useState<string>("");
+  const [loading, setLoading] = useState(true);
   const [stale, setStale] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [secondsAgo, setSecondsAgo] = useState(0);
@@ -21,26 +27,41 @@ export default function QueuePage() {
   const [cancelling, setCancelling] = useState(false);
   const [error, setError] = useState("");
 
-  async function load() {
+  const load = useCallback(async (isInitial = false) => {
+    if (isInitial) setLoading(true);
     try {
       const res = await fetch("/api/farmer/current");
       if (!res.ok) {
-        setBooking(null);
+        setBookings([]);
         setStale(true);
         return;
       }
       const data = await res.json();
-      setBooking(data.booking ?? null);
+      const activeList = data.bookings || (data.booking ? [data.booking] : []);
+      setBookings(activeList);
+
+      if (activeList.length > 0) {
+        if (paramBookingId && activeList.some((b: any) => b.id === paramBookingId)) {
+          setSelectedId(paramBookingId);
+        } else if (!selectedId || !activeList.some((b: any) => b.id === selectedId)) {
+          setSelectedId(activeList[0].id);
+        }
+      } else {
+        setSelectedId("");
+      }
+
       setLastUpdated(new Date());
       setStale(false);
+      setError("");
     } catch {
       setStale(true);
-      setBooking((prev: any) => (prev === undefined ? null : prev));
+    } finally {
+      if (isInitial) setLoading(false);
     }
-  }
+  }, [paramBookingId, selectedId]);
 
   useEffect(() => {
-    load();
+    load(true);
 
     let es: EventSource | null = null;
     try {
@@ -49,18 +70,18 @@ export default function QueuePage() {
         try {
           const payload = JSON.parse(event.data);
           if (payload.type && payload.type !== "CONNECTED") {
-            load();
+            load(false);
           }
         } catch {}
       };
     } catch {}
 
-    const interval = setInterval(load, 5000); // 5-second polling fallback
+    const interval = setInterval(() => load(false), 5000); // 5-second polling fallback
     return () => {
       clearInterval(interval);
       if (es) es.close();
     };
-  }, []);
+  }, [load]);
 
   useEffect(() => {
     const tick = setInterval(() => {
@@ -69,15 +90,15 @@ export default function QueuePage() {
     return () => clearInterval(tick);
   }, [lastUpdated]);
 
+  const activeBooking = bookings.find((b) => b.id === selectedId) || bookings[0] || null;
+
   async function handleCancel() {
-    if (!booking) return;
+    if (!activeBooking) return;
     setCancelling(true);
     setError("");
     try {
-      const res = await fetch(`/api/farmer/bookings/cancel`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ bookingId: booking.id }),
+      const res = await fetch(`/api/farmer/bookings?bookingId=${encodeURIComponent(activeBooking.id)}`, {
+        method: "DELETE",
       });
       const data = await res.json();
       if (!res.ok) {
@@ -85,7 +106,7 @@ export default function QueuePage() {
         return;
       }
       setShowCancelModal(false);
-      load();
+      load(false);
     } catch {
       setError("Failed to cancel booking. Please try again.");
     } finally {
@@ -93,7 +114,7 @@ export default function QueuePage() {
     }
   }
 
-  const canCancel = booking && ["BOOKED", "ARRIVED"].includes(booking.status);
+  const canCancel = activeBooking && ["BOOKED", "ARRIVED"].includes(activeBooking.status);
 
   return (
     <main className="min-h-screen pb-24 bg-surface">
@@ -107,9 +128,9 @@ export default function QueuePage() {
           </p>
         )}
 
-        {booking === undefined && <CardSkeleton />}
+        {loading && <CardSkeleton />}
 
-        {booking === null && (
+        {!loading && bookings.length === 0 && (
           <EmptyState
             icon={ListOrdered}
             title="Nothing to track yet"
@@ -119,8 +140,27 @@ export default function QueuePage() {
           />
         )}
 
-        {booking && (
+        {!loading && activeBooking && (
           <>
+            {/* MULTI-TOKEN SELECTOR TABS IF > 1 ACTIVE TOKEN */}
+            {bookings.length > 1 && (
+              <div className="flex items-center gap-1.5 p-1 bg-surface-sunken rounded-lg border border-line overflow-x-auto text-xs">
+                {bookings.map((b, i) => (
+                  <button
+                    key={b.id}
+                    onClick={() => setSelectedId(b.id)}
+                    className={`flex-1 py-1.5 px-2.5 rounded-md font-bold transition-all text-center whitespace-nowrap ${
+                      activeBooking.id === b.id
+                        ? "bg-white text-ink shadow-sm ring-1 ring-black/5"
+                        : "text-ink-faint hover:text-ink"
+                    }`}
+                  >
+                    Token #{i + 1}: <span className="font-mono text-brand-700">{b.token}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+
             <div className="flex items-center justify-between">
               <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-success">
                 <span className="live-dot" /> LIVE QUEUE
@@ -129,42 +169,42 @@ export default function QueuePage() {
             </div>
 
             <div className="panel p-5 text-center relative overflow-hidden">
-              <p className="text-xs text-ink-faint uppercase tracking-wide">Your Digital Token</p>
-              <p className="font-display text-5xl font-extrabold text-grain tnum my-2">{booking.token}</p>
-              <StatusBadge status={booking.status} />
+              <p className="text-xs text-ink-faint uppercase tracking-wide">Digital Token</p>
+              <p className="font-display text-5xl font-extrabold text-grain tnum my-2 font-mono">{activeBooking.token}</p>
+              <StatusBadge status={activeBooking.status} />
 
               <div className="mt-4 pt-3 border-t border-line grid grid-cols-2 gap-2 text-left text-xs">
                 <p className="text-ink-soft flex items-center gap-1">
                   <Wheat size={13} className="text-brand-600 shrink-0" />
-                  <span>{booking.cropName} · {booking.quantityQuintal} Q</span>
+                  <span>{activeBooking.cropName} · {activeBooking.quantityQuintal} Q</span>
                 </p>
                 <p className="text-ink-soft flex items-center gap-1">
                   <Clock size={13} className="text-brand-600 shrink-0" />
-                  <span>{booking.startTime}–{booking.endTime}</span>
+                  <span>{activeBooking.startTime}–{activeBooking.endTime}</span>
                 </p>
                 <p className="text-ink-soft flex items-center gap-1 col-span-2">
                   <MapPin size={13} className="text-brand-600 shrink-0" />
-                  <span className="truncate">{booking.centreName} · {formatDate(booking.date)}</span>
+                  <span className="truncate">{activeBooking.centreName} · {formatDate(activeBooking.date)}</span>
                 </p>
               </div>
             </div>
 
             <div className="panel p-5">
               <QueueRail
-                servingToken={booking.currentlyServing}
-                farmersAhead={booking.farmersAhead}
-                myToken={booking.token}
+                servingToken={activeBooking.currentlyServing}
+                farmersAhead={activeBooking.farmersAhead}
+                myToken={activeBooking.token}
               />
             </div>
 
             <div className="panel divide-y divide-line">
-              <Row label="Currently serving" value={booking.currentlyServing || "Not started"} />
-              <Row label="Farmers ahead of you" value={String(booking.farmersAhead)} emphasize />
-              <Row label="Estimated waiting time" value={`~${booking.estimatedWaitMins} min`} emphasize />
+              <Row label="Currently serving" value={activeBooking.currentlyServing || "Not started"} />
+              <Row label="Farmers ahead of you" value={String(activeBooking.farmersAhead)} emphasize />
+              <Row label="Estimated waiting time" value={`~${activeBooking.estimatedWaitMins} min`} emphasize />
             </div>
 
             <div className="panel p-4 text-center bg-brand-50 border-brand-600/15">
-              <p className="font-medium text-brand-700 text-sm">{booking.statusMessage}</p>
+              <p className="font-medium text-brand-700 text-sm">{activeBooking.statusMessage}</p>
             </div>
 
             {canCancel && (
@@ -174,7 +214,7 @@ export default function QueuePage() {
                   onClick={() => setShowCancelModal(true)}
                   className="btn-danger w-full !py-2.5 text-xs font-semibold"
                 >
-                  Cancel This Booking
+                  Cancel Token ({activeBooking.token})
                 </button>
               </div>
             )}
@@ -190,7 +230,7 @@ export default function QueuePage() {
               <h3 className="font-display font-bold text-base text-ink">Cancel Appointment?</h3>
             </div>
             <p className="text-xs text-ink-soft leading-relaxed">
-              Are you sure you want to cancel token <strong className="text-ink">{booking?.token}</strong>? Your slot will be freed and you will be removed from the active queue.
+              Are you sure you want to cancel token <strong className="text-ink">{activeBooking?.token}</strong>? Your slot will be freed and you will be removed from the active queue.
             </p>
             <div className="flex gap-2.5 pt-2">
               <button
@@ -229,3 +269,4 @@ function Row({ label, value, emphasize }: { label: string; value: string; emphas
     </div>
   );
 }
+

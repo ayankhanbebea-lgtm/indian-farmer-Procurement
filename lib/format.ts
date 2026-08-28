@@ -64,6 +64,39 @@ export function formatDateShort(dateStr?: string | null) {
   }
 }
 
+export function getTodayIST(): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date());
+}
+
+export function normalizeDateToYMD(dateStr?: string | null): string {
+  if (!dateStr) return getTodayIST();
+  const trimmed = dateStr.trim();
+  
+  // If already in YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    return trimmed;
+  }
+  
+  // If in DD-MM-YYYY or DD/MM/YYYY
+  const ddmmyyyy = trimmed.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/);
+  if (ddmmyyyy) {
+    const day = ddmmyyyy[1].padStart(2, "0");
+    const month = ddmmyyyy[2].padStart(2, "0");
+    const year = ddmmyyyy[3];
+    return `${year}-${month}-${day}`;
+  }
+
+  // If in ISO timestamp or parseable Date
+  try {
+    const d = new Date(trimmed);
+    if (!isNaN(d.getTime())) {
+      return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(d);
+    }
+  } catch {}
+
+  return trimmed;
+}
+
 export function formatCurrency(amount?: number | null) {
   if (amount == null || isNaN(Number(amount))) return "₹0";
   try {
@@ -72,3 +105,4 @@ export function formatCurrency(amount?: number | null) {
     return `₹${amount}`;
   }
 }
+

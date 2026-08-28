@@ -2,13 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { getDb } from "@/lib/db";
 import { currentlyServingToken, centreLoad } from "@/lib/services";
+import { getTodayIST, normalizeDateToYMD } from "@/lib/format";
 
 export async function GET(req: NextRequest) {
   const session = await getSession();
   if (!session || session.role !== "ADMIN") return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const db = getDb();
   const url = new URL(req.url);
-  const date = url.searchParams.get("date") || new Date().toISOString().slice(0, 10);
+  const rawDate = url.searchParams.get("date");
+  const date = rawDate ? normalizeDateToYMD(rawDate) : getTodayIST();
+
   
   const centres = db.prepare(`SELECT id, name, code FROM procurement_centres ORDER BY name`).all() as any[];
   

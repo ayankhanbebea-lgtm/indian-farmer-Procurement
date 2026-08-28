@@ -17,7 +17,9 @@ import {
   Calendar,
   Layers,
   CalendarCheck,
+  AlertCircle,
 } from "lucide-react";
+
 import { useLanguage } from "@/lib/i18n/context";
 
 type Crop = { id: string; name: string; code: string };
@@ -80,6 +82,10 @@ export default function BookSlotPage() {
   const [slotId, setSlotId] = useState("");
   const [quantity, setQuantity] = useState("");
 
+  const [activeCount, setActiveCount] = useState(0);
+  const [maxLimit, setMaxLimit] = useState(3);
+  const [isMaxReached, setIsMaxReached] = useState(false);
+
   const [loading, setLoading] = useState(true);
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -91,16 +97,29 @@ export default function BookSlotPage() {
     centreName: string;
   } | null>(null);
 
-  // Initial load of dates and crops
+  // Initial load of dates, crops, and active token count
   async function loadInitial() {
     setLoading(true);
     try {
-      const res = await fetch("/api/farmer/booking-options");
-      const data = await res.json();
-      setValidDates(data.validDates || []);
-      setCrops(data.crops || []);
-      if (!date && data.today) {
-        setDate(data.today);
+      const [optRes, curRes] = await Promise.all([
+        fetch("/api/farmer/booking-options"),
+        fetch("/api/farmer/current"),
+      ]);
+
+      if (curRes.ok) {
+        const curData = await curRes.json();
+        setActiveCount(curData.activeCount ?? 0);
+        setMaxLimit(curData.maxLimit ?? 3);
+        setIsMaxReached(Boolean(curData.isMaxReached));
+      }
+
+      if (optRes.ok) {
+        const data = await optRes.json();
+        setValidDates(data.validDates || []);
+        setCrops(data.crops || []);
+        if (!date && data.today) {
+          setDate(data.today);
+        }
       }
     } catch {
       setError("Unable to load booking options. Please refresh.");
@@ -108,6 +127,7 @@ export default function BookSlotPage() {
       setLoading(false);
     }
   }
+
 
   // Load centres whenever date or crop changes
   async function loadCentres(selectedDate: string) {
@@ -269,15 +289,39 @@ export default function BookSlotPage() {
 
         {error && <p className="text-sm text-error bg-error/5 rounded-lg px-3 py-2 mb-4">{error}</p>}
 
-        {/* STEP 1: SELECT DATE */}
-        {step === 1 && (
-          <div className="space-y-4 animate-rise-in">
+        {/* MAXIMUM 3 TOKENS REACHED BLOCKER */}
+        {isMaxReached ? (
+          <div className="panel p-6 text-center space-y-4 animate-rise-in border-amber-200 bg-amber-50/70">
+            <span className="w-12 h-12 rounded-full bg-amber-100 text-amber-800 flex items-center justify-center mx-auto">
+              <AlertCircle size={24} />
+            </span>
             <div>
-              <h2 className="font-display font-bold text-xl text-ink">Select procurement date</h2>
-              <p className="text-sm text-ink-faint mt-0.5">
-                Choose an appointment date within the active procurement window.
+              <h2 className="font-display font-bold text-lg text-ink">Maximum Active Tokens Reached (3/3)</h2>
+              <p className="text-xs text-ink-soft mt-1 leading-relaxed max-w-sm mx-auto">
+                You currently have 3 active tokens. Please wait until one of your existing tokens is completed or cleared before booking another slot.
               </p>
             </div>
+            <div className="flex gap-2.5 pt-2 max-w-xs mx-auto">
+              <button className="btn-secondary flex-1 text-xs font-semibold" onClick={() => router.push("/farmer")}>
+                My Active Tokens
+              </button>
+              <button className="btn-primary flex-1 text-xs font-semibold" onClick={() => router.push("/farmer/queue")}>
+                Live Queue
+              </button>
+            </div>
+          </div>
+        ) : (
+          <>
+            {/* STEP 1: SELECT DATE */}
+            {step === 1 && (
+              <div className="space-y-4 animate-rise-in">
+                <div>
+                  <h2 className="font-display font-bold text-xl text-ink">Select procurement date</h2>
+                  <p className="text-sm text-ink-faint mt-0.5">
+                    Choose an appointment date within the active procurement window.
+                  </p>
+                </div>
+
 
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
               {validDates.map((d) => {
@@ -402,7 +446,12 @@ export default function BookSlotPage() {
                   </span>
                 </div>
                 <div>
-                  <p className="font-display font-bold text-lg text-ink">{recommended.name}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="font-display font-bold text-lg text-ink">{recommended.name}</p>
+                    <span className="text-[10px] font-mono font-bold bg-brand-100 text-brand-800 px-1.5 py-0.5 rounded">
+                      {recommended.code}
+                    </span>
+                  </div>
                   <p className="text-xs text-ink-faint mt-0.5">{recommended.reason}</p>
                 </div>
 
@@ -429,7 +478,7 @@ export default function BookSlotPage() {
                     }}
                     className="btn-primary !py-2 !px-4 text-xs font-semibold"
                   >
-                    Select Centre
+                    Select Centre ({recommended.code})
                   </button>
                 </div>
               </div>
@@ -453,7 +502,12 @@ export default function BookSlotPage() {
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div>
-                        <p className="font-bold text-base text-ink">{c.name}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="font-bold text-base text-ink">{c.name}</p>
+                          <span className="text-[10px] font-mono font-bold bg-surface-sunken text-ink-soft px-1.5 py-0.5 rounded border border-line">
+                            {c.code}
+                          </span>
+                        </div>
                         <p className="text-xs text-ink-faint flex items-center gap-1.5 mt-0.5">
                           <MapPin size={12} className="text-brand-600" /> {c.distanceKm} km away · {c.district}
                         </p>
@@ -464,6 +518,7 @@ export default function BookSlotPage() {
                         </span>
                       </div>
                     </div>
+
 
                     <div className="grid grid-cols-3 gap-2 mt-3 pt-2.5 border-t border-line text-xs">
                       <div>
@@ -635,11 +690,14 @@ export default function BookSlotPage() {
             </button>
           </div>
         )}
+        </>
+        )}
       </div>
       <FarmerNav />
     </main>
   );
 }
+
 
 function ReviewRow({ label, value, emphasize }: { label: string; value: string; emphasize?: boolean }) {
   return (

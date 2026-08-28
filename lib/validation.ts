@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { normalizeDateToYMD } from "./format";
 
 export const sendOtpSchema = z.object({
   mobileNumber: z
@@ -29,9 +30,10 @@ export const createBookingSchema = z.object({
   cropCode: z.string().min(2),
   quantityQuintal: z.coerce.number().positive().max(2000, "Please enter a realistic quantity"),
   centreId: z.string().min(1),
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  date: z.string().min(1).transform((val) => normalizeDateToYMD(val)),
   slotId: z.string().min(1),
 });
+
 
 export const staffActionSchema = z.object({
   bookingId: z.string().min(1),
