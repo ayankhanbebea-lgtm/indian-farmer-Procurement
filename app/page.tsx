@@ -1,5 +1,6 @@
 import Link from "next/link";
 import LandingHeader from "@/components/LandingHeader";
+import LandingHero from "@/components/LandingHero";
 import { Mark } from "@/components/Logo";
 import { CalendarCheck, ListOrdered, Wallet, ClipboardCheck, MapPin, LayoutGrid, Landmark } from "lucide-react";
 
@@ -8,30 +9,9 @@ export default function LandingPage() {
     <main className="min-h-screen flex flex-col bg-surface">
       <LandingHeader />
 
+      {/* Dynamic Live Weather Hero */}
+      <LandingHero />
 
-      {/* Hero */}
-      <section className="relative overflow-hidden bg-navy text-white">
-        <svg className="absolute -right-16 -top-20 text-white/[0.05]" width="480" height="480" viewBox="0 0 480 480" fill="none">
-          <path d="M120 420 C180 300 210 180 300 60" stroke="currentColor" strokeWidth="26" strokeLinecap="round" />
-          <path d="M180 380 C230 280 260 180 330 90" stroke="currentColor" strokeWidth="20" strokeLinecap="round" />
-        </svg>
-        <div className="relative max-w-5xl mx-auto px-4 pt-16 pb-20 text-center">
-          <h1 className="font-display text-4xl md:text-5xl font-extrabold tracking-tight">Smart Procurement</h1>
-          <p className="mt-3 text-lg text-white/70 font-medium">Less waiting. Better planning. Transparent procurement.</p>
-          <p className="mt-4 max-w-xl mx-auto text-white/60">
-            Helping farmers schedule procurement visits, track their queue, and stay informed about procurement and
-            payment status.
-          </p>
-          <div className="mt-8 flex flex-col sm:flex-row gap-3 justify-center">
-            <Link href="/login" className="btn-primary !bg-white !text-navy hover:!bg-white/90">
-              Book a Procurement Slot
-            </Link>
-            <Link href="/login" className="btn border border-white/25 !text-white hover:!bg-white/5">
-              Check Booking Status
-            </Link>
-          </div>
-        </div>
-      </section>
 
       {/* How it works */}
       <section className="max-w-5xl mx-auto px-4 py-16 w-full">

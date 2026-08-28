@@ -98,3 +98,10 @@ html, body {
     font-variant-numeric: tabular-nums;
   }
 }
+
+@keyframes cloudDrift {
+  0% { transform: translateX(-10%); }
+  50% { transform: translateX(10%); }
+  100% { transform: translateX(-10%); }
+}
+
