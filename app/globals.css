@@ -1,0 +1,100 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-display: "Manrope", sans-serif;
+  --font-body: "Inter", sans-serif;
+}
+
+html, body {
+  background-color: theme("colors.surface.DEFAULT");
+  color: theme("colors.ink.DEFAULT");
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+::selection {
+  background: theme("colors.brand.100");
+}
+
+/* Respect reduced-motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+@layer components {
+  /* ---------- Buttons ---------- */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-5 py-3 text-[15px] font-semibold
+           transition-all duration-150 ease-out active:scale-[0.98]
+           disabled:opacity-45 disabled:cursor-not-allowed disabled:active:scale-100
+           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-brand-600;
+  }
+  .btn-primary {
+    @apply btn bg-brand-600 text-white shadow-sm hover:bg-brand-700;
+  }
+  .btn-secondary {
+    @apply btn bg-white text-brand-700 border border-brand-600/30 hover:border-brand-600 hover:bg-brand-50;
+  }
+  .btn-ghost {
+    @apply btn text-ink-soft hover:bg-black/[0.04];
+  }
+  .btn-danger {
+    @apply btn bg-white text-error border border-error/30 hover:bg-error/5;
+  }
+
+  /* ---------- Surfaces ---------- */
+  .card {
+    @apply bg-surface-card rounded-lg border border-line/70 p-4 shadow-soft;
+  }
+  .panel {
+    @apply bg-surface-card rounded-xl border border-line/70 shadow-soft;
+  }
+
+  /* ---------- Forms ---------- */
+  .input {
+    @apply w-full rounded-lg border border-line bg-white px-4 py-3 text-[15px] text-ink placeholder:text-ink-faint
+           transition-colors focus:outline-none focus:ring-2 focus:ring-brand-600/25 focus:border-brand-600;
+  }
+  .label {
+    @apply block text-[13px] font-medium text-ink-soft mb-1.5;
+  }
+
+  /* ---------- Badges / status ---------- */
+  .badge {
+    @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold whitespace-nowrap;
+  }
+
+  /* ---------- Skeleton loaders ---------- */
+  .skel {
+    @apply relative overflow-hidden bg-surface-sunken rounded-lg;
+  }
+  .skel::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.55), transparent);
+    animation: shimmer 1.4s infinite;
+  }
+  @keyframes shimmer {
+    100% { transform: translateX(100%); }
+  }
+
+  /* ---------- Live dot ---------- */
+  .live-dot {
+    @apply inline-block w-2 h-2 rounded-full bg-success animate-pulse-dot;
+  }
+
+  /* ---------- Tabular numerals for quantities/amounts/tokens ---------- */
+  .tnum {
+    font-variant-numeric: tabular-nums;
+  }
+}
