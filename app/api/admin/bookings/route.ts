@@ -29,7 +29,8 @@ export async function GET(req: NextRequest) {
     SELECT b.id, b.token, b.status, b.quantity_quintal as quantityQuintal, b.actual_quantity as actualQuantity,
            b.created_at as createdAt, u.name as farmerName, u.phone as farmerPhone,
            c.name as centreName, cr.name as cropName, s.date, s.start_time as startTime,
-           p.status as paymentStatus, p.amount as paymentAmount,
+           COALESCE(p.payment_status, p.status) as paymentStatus,
+           COALESCE(p.total_amount, p.amount) as paymentAmount,
            q.position as queuePosition
     FROM bookings b
     JOIN farmer_profiles fp ON b.farmer_id = fp.id

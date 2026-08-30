@@ -125,9 +125,18 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const farmerUser = db
-    .prepare(`SELECT u.id FROM farmer_profiles fp JOIN users u ON fp.user_id = u.id WHERE fp.id = ?`)
-    .get(booking.farmerId) as { id: string } | undefined;
+  const fullBooking = db
+    .prepare(
+      `SELECT b.id, b.crop_id, b.farmer_id, b.centre_id, b.token,
+              c.name as cropName, COALESCE(c.msp_rate, 2275) as cropMsp,
+              u.name as farmerName, u.id as farmerUserId
+       FROM bookings b
+       JOIN crops c ON b.crop_id = c.id
+       JOIN farmer_profiles fp ON b.farmer_id = fp.id
+       JOIN users u ON fp.user_id = u.id
+       WHERE b.id = ?`
+    )
+    .get(bookingId) as any;
 
   const newStatus = RESULT_STATUS[action] || action;
 
@@ -135,42 +144,65 @@ export async function POST(req: NextRequest) {
     db.exec("BEGIN IMMEDIATE");
 
     if (action === "COMPLETE_PROCUREMENT") {
+      const finalQuantity = actualQuantity ?? 0;
+      const rate = parsed.data.ratePerUnit && parsed.data.ratePerUnit > 0 ? parsed.data.ratePerUnit : (fullBooking?.cropMsp || 2275);
+      const totalAmount = Math.round(finalQuantity * rate * 100) / 100;
+
       db.prepare(`UPDATE bookings SET status = ?, actual_quantity = ?, quality_grade = ?, remarks = ?, updated_at = ? WHERE id = ?`).run(
         newStatus,
-        actualQuantity ?? null,
-        qualityGrade ?? null,
+        finalQuantity,
+        qualityGrade ?? "GRADE_A",
         remarks ?? null,
         nowIso(),
         bookingId
       );
-      // Ensure a payment row exists, PENDING
-      const existingPayment = db.prepare(`SELECT id FROM payments WHERE booking_id = ?`).get(bookingId);
+
+      // Ensure exactly ONE payment record exists, with status PENDING
+      const existingPayment = db.prepare(`SELECT id FROM payments WHERE booking_id = ?`).get(bookingId) as any;
       if (!existingPayment) {
-        db.prepare(`INSERT INTO payments (id, booking_id, status, created_at, updated_at) VALUES (?, ?, 'PENDING', ?, ?)`).run(
-          newId("pay_"),
+        const payId = newId("pay_");
+        db.prepare(
+          `INSERT INTO payments (
+            id, booking_id, farmer_id, farmer_name, procurement_centre_id,
+            crop, final_quantity, quantity_unit, rate_per_unit, total_amount,
+            amount, payment_status, status, created_at, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, 'Quintal', ?, ?, ?, 'PENDING', 'PENDING', ?, ?)`
+        ).run(
+          payId,
           bookingId,
+          fullBooking?.farmer_id || booking.farmerId,
+          fullBooking?.farmerName || "Farmer",
+          fullBooking?.centre_id || booking.centreId,
+          fullBooking?.cropName || "Crop",
+          finalQuantity,
+          rate,
+          totalAmount,
+          totalAmount,
           nowIso(),
           nowIso()
         );
+      } else {
+        db.prepare(
+          `UPDATE payments SET
+            farmer_name = COALESCE(?, farmer_name),
+            crop = COALESCE(?, crop),
+            final_quantity = ?,
+            rate_per_unit = ?,
+            total_amount = ?,
+            amount = ?,
+            updated_at = ?
+          WHERE id = ?`
+        ).run(
+          fullBooking?.farmerName,
+          fullBooking?.cropName,
+          finalQuantity,
+          rate,
+          totalAmount,
+          totalAmount,
+          nowIso(),
+          existingPayment.id
+        );
       }
-    } else if (action === "START_PAYMENT") {
-      db.prepare(`UPDATE bookings SET status = ?, updated_at = ? WHERE id = ?`).run(newStatus, nowIso(), bookingId);
-      db.prepare(`UPDATE payments SET status = 'PROCESSING', amount = COALESCE(?, amount), updated_at = ? WHERE booking_id = ?`).run(
-        amount ?? null,
-        nowIso(),
-        bookingId
-      );
-    } else if (action === "COMPLETE_PAYMENT") {
-      db.prepare(`UPDATE bookings SET status = ?, updated_at = ? WHERE id = ?`).run(newStatus, nowIso(), bookingId);
-      const ref = `TXN-${booking.token}`;
-      db.prepare(`UPDATE payments SET status = 'PAID', reference_no = ?, paid_at = ?, updated_at = ? WHERE booking_id = ?`).run(
-        ref,
-        nowIso(),
-        nowIso(),
-        bookingId
-      );
-    } else if (action === "PAYMENT_FAILED") {
-      db.prepare(`UPDATE payments SET status = 'FAILED', updated_at = ? WHERE booking_id = ?`).run(nowIso(), bookingId);
     } else if (action === "SKIP") {
       const maxPos = ((db.prepare(`SELECT MAX(position) as m FROM queue_entries WHERE centre_id = ? AND date = ?`).get(booking.centreId, today) as any)?.m || 10);
       db.prepare(`UPDATE queue_entries SET position = ?, called_at = NULL WHERE booking_id = ?`).run(maxPos + 1, bookingId);
@@ -189,13 +221,11 @@ export async function POST(req: NextRequest) {
   }
 
   const NOTIF_MESSAGE: Record<string, string> = {
-    COMPLETE_PROCUREMENT: "Your crop procurement has been completed.",
-    START_PAYMENT: "Your payment is being processed.",
-    COMPLETE_PAYMENT: "Your procurement payment has been credited.",
+    COMPLETE_PROCUREMENT: "Your crop procurement has been completed. Payment record created in Pending status.",
     MARK_NO_SHOW: "You were marked as a no-show for your booked slot.",
   };
-  if (farmerUser && NOTIF_MESSAGE[action]) {
-    sendNotification(farmerUser.id, action, NOTIF_MESSAGE[action], bookingId);
+  if (fullBooking?.farmerUserId && NOTIF_MESSAGE[action]) {
+    sendNotification(fullBooking.farmerUserId, action, NOTIF_MESSAGE[action], bookingId);
   }
   recordAudit(session.id, action, "booking", bookingId);
 
@@ -207,6 +237,16 @@ export async function POST(req: NextRequest) {
     bookingId,
     status: newStatus,
   });
+
+  if (action === "COMPLETE_PROCUREMENT") {
+    broadcastRealtimeEvent({
+      type: "PAYMENT_CREATED",
+      centreId: centre.id,
+      farmerId: booking.farmerId,
+      bookingId,
+      paymentStatus: "PENDING",
+    });
+  }
 
   return NextResponse.json({ ok: true, status: newStatus });
 }

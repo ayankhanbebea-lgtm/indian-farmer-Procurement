@@ -55,8 +55,8 @@ export default function AdminDashboard() {
   if (quietest) {
     insights.push(`${quietest.name} has the lowest wait count (${quietest.waiting}).`);
   }
-  if (paymentBreakdown.pendingCount > 0) {
-    insights.push(`₹${paymentBreakdown.pendingAmount.toLocaleString("en-IN")} pending disbursement across ${paymentBreakdown.pendingCount} bookings.`);
+  if (overview.paymentStats?.pendingCount > 0) {
+    insights.push(`₹${Number(overview.paymentStats.pendingAmount || 0).toLocaleString("en-IN")} pending disbursement across ${overview.paymentStats.pendingCount} bookings.`);
   }
 
   return (

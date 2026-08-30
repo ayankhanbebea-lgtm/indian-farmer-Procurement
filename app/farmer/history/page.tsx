@@ -7,8 +7,9 @@ import StatusBadge from "@/components/StatusBadge";
 import Timeline from "@/components/Timeline";
 import EmptyState from "@/components/EmptyState";
 import { CardSkeleton } from "@/components/Skeleton";
+import PaymentReceiptModal from "@/components/PaymentReceiptModal";
 import { formatDate, formatCurrency } from "@/lib/format";
-import { History, ChevronDown, ChevronLeft, Wheat, AlertCircle, RefreshCw } from "lucide-react";
+import { History, ChevronDown, ChevronLeft, Wheat, AlertCircle, RefreshCw, Download } from "lucide-react";
 import { useLanguage } from "@/lib/i18n/context";
 
 const PROCUREMENT_STEPS = ["BOOKED", "ARRIVED", "VERIFIED", "WEIGHING", "PROCUREMENT_COMPLETED"];
@@ -30,6 +31,7 @@ export default function HistoryPage() {
   const [bookings, setBookings] = useState<any[]>([]);
   const [me, setMe] = useState<any>(null);
   const [open, setOpen] = useState<string | null>(null);
+  const [selectedReceipt, setSelectedReceipt] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -163,9 +165,29 @@ export default function HistoryPage() {
                     </div>
 
                     {b.paymentReference && (
-                      <div className="pt-2 border-t border-line/60">
-                        <p className="text-ink-faint">Transaction Ref</p>
-                        <p className="font-mono font-semibold text-ink mt-0.5">{b.paymentReference}</p>
+                      <div className="pt-2 border-t border-line/60 flex items-center justify-between">
+                        <div>
+                          <p className="text-ink-faint">Transaction Ref</p>
+                          <p className="font-mono font-semibold text-ink mt-0.5">{b.paymentReference}</p>
+                        </div>
+                        {b.paymentStatus === "PAID" && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setSelectedReceipt({
+                                ...b,
+                                farmerName: me?.name || "Farmer",
+                                finalQuantity: b.actualQuantity || b.quantityQuintal,
+                                crop: b.cropName,
+                                totalAmount: b.paymentAmount,
+                                transactionId: b.paymentReference,
+                              })
+                            }
+                            className="btn-primary !py-1 !px-2.5 text-xs font-bold inline-flex items-center gap-1.5 bg-emerald-700 hover:bg-emerald-800"
+                          >
+                            <Download size={12} /> {t("downloadReceipt")}
+                          </button>
+                        )}
                       </div>
                     )}
 
@@ -178,6 +200,14 @@ export default function HistoryPage() {
             );
           })}
       </div>
+
+      {selectedReceipt && (
+        <PaymentReceiptModal
+          payment={selectedReceipt}
+          onClose={() => setSelectedReceipt(null)}
+        />
+      )}
+
       <FarmerNav />
     </main>
   );

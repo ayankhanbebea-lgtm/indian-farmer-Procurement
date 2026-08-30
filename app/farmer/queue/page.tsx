@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import FarmerTopBar from "@/components/FarmerTopBar";
 import FarmerNav from "@/components/FarmerNav";
@@ -13,6 +13,14 @@ import { ListOrdered, WifiOff, MapPin, Wheat, Clock, AlertCircle, RefreshCw } fr
 import { useLanguage } from "@/lib/i18n/context";
 
 export default function QueuePage() {
+  return (
+    <Suspense fallback={<main className="min-h-screen pb-24 bg-surface p-4"><CardSkeleton /></main>}>
+      <QueuePageContent />
+    </Suspense>
+  );
+}
+
+function QueuePageContent() {
   const { t } = useLanguage();
   const searchParams = useSearchParams();
   const paramBookingId = searchParams.get("bookingId");

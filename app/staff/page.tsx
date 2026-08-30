@@ -29,8 +29,9 @@ export default function StaffDashboard() {
   const [selectedDate, setSelectedDate] = useState<string>("");
   const [weighModal, setWeighModal] = useState<any>(null);
   const [actualQty, setActualQty] = useState("");
-  const [payAmount, setPayAmount] = useState("");
-  const [payModal, setPayModal] = useState<any>(null);
+  const [ratePerUnit, setRatePerUnit] = useState("");
+  const [qualityGrade, setQualityGrade] = useState("GRADE_A");
+  const [remarks, setRemarks] = useState("");
   const [noShowConfirm, setNoShowConfirm] = useState<any>(null);
   const [skipConfirm, setSkipConfirm] = useState<any>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -178,7 +179,6 @@ export default function StaffDashboard() {
         return;
       }
       setWeighModal(null);
-      setPayModal(null);
       setNoShowConfirm(null);
       setSkipConfirm(null);
       load(false);
@@ -491,7 +491,10 @@ export default function StaffDashboard() {
                       <button
                         onClick={() => {
                           setWeighModal(servingRow);
-                          setActualQty(String(servingRow.quantityQuintal));
+                          setActualQty(String(servingRow.actualQuantity || servingRow.quantityQuintal));
+                          setRatePerUnit(String(servingRow.ratePerUnit || servingRow.cropMsp || 2275));
+                          setQualityGrade(servingRow.qualityGrade || "GRADE_A");
+                          setRemarks("");
                         }}
                         className="btn-primary flex-1 text-xs !py-2.5 font-bold inline-flex items-center justify-center gap-1.5"
                       >
@@ -499,26 +502,15 @@ export default function StaffDashboard() {
                       </button>
                     )}
 
-                    {(servingRow.status === "COMPLETED" || servingRow.status === "PROCUREMENT_COMPLETED") && (
-                      <button
-                        onClick={() => {
-                          setPayModal(servingRow);
-                          setPayAmount(String(Math.round((servingRow.actualQuantity || servingRow.quantityQuintal) * 5450)));
-                        }}
-                        className="btn-primary flex-1 text-xs !py-2.5 font-bold inline-flex items-center justify-center gap-1.5"
-                      >
-                        <Wallet size={14} /> {t("initiatePayment")}
-                      </button>
-                    )}
-
-                    {servingRow.status === "PAYMENT_PROCESSING" && (
-                      <button
-                        disabled={busy}
-                        onClick={() => doAction(servingRow.id, "COMPLETE_PAYMENT")}
-                        className="btn-primary flex-1 text-xs !py-2.5 font-bold inline-flex items-center justify-center gap-1.5"
-                      >
-                        <CheckCircle2 size={14} /> {t("markPaid")}
-                      </button>
+                    {["COMPLETED", "PROCUREMENT_COMPLETED", "PAYMENT_PROCESSING", "PAYMENT_COMPLETED"].includes(servingRow.status) && (
+                      <div className="flex-1 p-2 rounded bg-emerald-50 border border-emerald-200 text-center">
+                        <span className="text-[11px] font-bold text-emerald-800 flex items-center justify-center gap-1">
+                          <CheckCircle2 size={13} /> Procurement Completed
+                        </span>
+                        <span className="text-[10px] text-emerald-700 block mt-0.5">
+                          Payment Record ({formatCurrency(servingRow.paymentAmount)}) Sent to Admin
+                        </span>
+                      </div>
                     )}
 
                     <button
@@ -640,31 +632,14 @@ export default function StaffDashboard() {
                           <button
                             onClick={() => {
                               setWeighModal(r);
-                              setActualQty(String(r.quantityQuintal));
+                              setActualQty(String(r.actualQuantity || r.quantityQuintal));
+                              setRatePerUnit(String(r.ratePerUnit || r.cropMsp || 2275));
+                              setQualityGrade(r.qualityGrade || "GRADE_A");
+                              setRemarks("");
                             }}
                             className="btn-primary !py-1 !px-2.5 text-xs font-semibold"
                           >
                             {t("recordWeight")}
-                          </button>
-                        )}
-                        {(r.status === "COMPLETED" || r.status === "PROCUREMENT_COMPLETED") && (
-                          <button
-                            onClick={() => {
-                              setPayModal(r);
-                              setPayAmount(String(Math.round((r.actualQuantity || r.quantityQuintal) * 5450)));
-                            }}
-                            className="btn-primary !py-1 !px-2.5 text-xs font-semibold"
-                          >
-                            {t("startPayment")}
-                          </button>
-                        )}
-                        {r.status === "PAYMENT_PROCESSING" && (
-                          <button
-                            disabled={busy}
-                            onClick={() => doAction(r.id, "COMPLETE_PAYMENT")}
-                            className="btn-primary !py-1 !px-2.5 text-xs font-semibold"
-                          >
-                            {t("markPaid")}
                           </button>
                         )}
                         <button
@@ -762,76 +737,117 @@ export default function StaffDashboard() {
       {/* WEIGH MODAL */}
       {weighModal && (
         <Modal title={`${t("recordWeight")} — ${weighModal.token}`} onClose={() => setWeighModal(null)}>
-          <div className="space-y-3">
-            <div className="bg-surface-sunken p-3 rounded-lg text-xs space-y-1">
-              <p>
-                <strong>{t("name")}:</strong> {weighModal.farmerName}
-              </p>
-              <p>
-                <strong>{t("crop")}:</strong> {weighModal.cropName}
-              </p>
-              <p>
-                <strong>{t("bookedQuantity")}:</strong> {weighModal.quantityQuintal} Quintal
-              </p>
+          <div className="space-y-4">
+            <div className="bg-surface-sunken p-3 rounded-lg text-xs space-y-1.5 border border-line">
+              <div className="flex justify-between">
+                <span className="text-ink-faint">{t("name")}:</span>
+                <span className="font-semibold text-ink">{weighModal.farmerName}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-ink-faint">{t("crop")}:</span>
+                <span className="font-semibold text-ink">{weighModal.cropName}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-ink-faint">{t("bookedQuantity")}:</span>
+                <span className="font-mono font-semibold text-ink">{weighModal.quantityQuintal} Quintal</span>
+              </div>
             </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="label text-xs font-bold">{t("scaleWeight")} (Quintal) *</label>
+                <input
+                  className="input tnum text-base font-bold"
+                  type="number"
+                  step="0.01"
+                  min="0.1"
+                  value={actualQty}
+                  onChange={(e) => setActualQty(e.target.value)}
+                  placeholder="e.g. 50.0"
+                  autoFocus
+                />
+              </div>
+              <div>
+                <label className="label text-xs font-bold">{t("mspRate")} (₹/Q) *</label>
+                <input
+                  className="input tnum text-base font-bold"
+                  type="number"
+                  step="1"
+                  min="100"
+                  value={ratePerUnit}
+                  onChange={(e) => setRatePerUnit(e.target.value)}
+                  placeholder="e.g. 2275"
+                />
+              </div>
+            </div>
+
             <div>
-              <label className="label text-xs font-bold">{t("scaleWeight")} (Quintal) *</label>
+              <label className="label text-xs font-bold">{t("qualityGrade")} *</label>
+              <select
+                className="input text-xs font-semibold"
+                value={qualityGrade}
+                onChange={(e) => setQualityGrade(e.target.value)}
+              >
+                <option value="GRADE_A">Grade A (Fair Average Quality - FAQ)</option>
+                <option value="SUPERIOR">Superior / Premium Grade</option>
+                <option value="GRADE_B">Grade B (Standard)</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="label text-xs font-bold">Remarks (Optional)</label>
               <input
-                className="input tnum text-base font-bold"
-                type="number"
-                step="0.01"
-                min="0.1"
-                value={actualQty}
-                onChange={(e) => setActualQty(e.target.value)}
-                placeholder="e.g. 45.2"
-                autoFocus
+                className="input text-xs"
+                type="text"
+                placeholder="e.g. Moisture content verified within 12% limit"
+                value={remarks}
+                onChange={(e) => setRemarks(e.target.value)}
               />
             </div>
+
+            {/* LIVE CONFIRMATION SUMMARY */}
+            <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-300 text-xs space-y-2">
+              <p className="font-bold text-emerald-900 uppercase tracking-wide text-[11px] flex items-center gap-1.5">
+                <CheckCircle2 size={13} className="text-emerald-700" /> {t("confirmationSummary")}
+              </p>
+              <div className="grid grid-cols-2 gap-2 text-ink-soft pt-1 border-t border-emerald-200/80">
+                <div>
+                  <span className="text-[10px] text-ink-faint block">{t("crop")}</span>
+                  <span className="font-semibold text-ink text-xs">{weighModal.cropName}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-ink-faint block">{t("finalQuantity")}</span>
+                  <span className="font-semibold text-ink text-xs font-mono">{Number(actualQty) || 0} Quintal</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-ink-faint block">{t("ratePerUnit")}</span>
+                  <span className="font-semibold text-ink text-xs">{formatCurrency(Number(ratePerUnit) || 0)} / Q</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-emerald-800 font-bold block">{t("calculatedPayable")}</span>
+                  <span className="font-display font-black text-emerald-900 text-sm">
+                    {formatCurrency((Number(actualQty) || 0) * (Number(ratePerUnit) || 0))}
+                  </span>
+                </div>
+              </div>
+              <p className="text-[10px] text-emerald-800 leading-tight pt-1">
+                ✓ Once confirmed, procurement is marked COMPLETED and an official payment record starts in PENDING status for Admin processing.
+              </p>
+            </div>
+
             <button
-              className="btn-primary w-full mt-4 font-bold !py-2.5 text-xs"
-              disabled={busy || !actualQty || Number(actualQty) <= 0}
+              className="btn-primary w-full font-bold !py-3 text-xs shadow-sm"
+              disabled={busy || !actualQty || Number(actualQty) <= 0 || !ratePerUnit || Number(ratePerUnit) <= 0}
               onClick={() =>
                 doAction(weighModal.id, "COMPLETE_PROCUREMENT", {
                   actualQuantity: Number(actualQty),
-                  qualityGrade: "GRADE_A",
+                  ratePerUnit: Number(ratePerUnit),
+                  qualityGrade,
+                  remarks: remarks || undefined,
                 })
               }
             >
-              {t("confirmWeightAndComplete")}
-            </button>
-          </div>
-        </Modal>
-      )}
-
-      {/* PAY MODAL */}
-      {payModal && (
-        <Modal title={`${t("initiatePayment")} — ${payModal.token}`} onClose={() => setPayModal(null)}>
-          <div className="space-y-3">
-            <div className="bg-surface-sunken p-3 rounded-lg text-xs space-y-1">
-              <p>
-                <strong>{t("name")}:</strong> {payModal.farmerName}
-              </p>
-              <p>
-                <strong>{t("scaleWeight")}:</strong> {payModal.actualQuantity || payModal.quantityQuintal} Quintal
-              </p>
-            </div>
-            <div>
-              <label className="label text-xs font-bold">{t("paymentPending")} (₹) *</label>
-              <input
-                className="input tnum text-base font-bold"
-                type="number"
-                min="1"
-                value={payAmount}
-                onChange={(e) => setPayAmount(e.target.value)}
-                autoFocus
-              />
-            </div>
-            <button
-              className="btn-primary w-full mt-4 font-bold !py-2.5 text-xs"
-              disabled={busy || !payAmount || Number(payAmount) <= 0}
-              onClick={() => doAction(payModal.id, "START_PAYMENT", { amount: Number(payAmount) })}
-            >
-              {t("authorizePayment")} ({formatCurrency(Number(payAmount))})
+              {t("confirmProcurementComplete")}
             </button>
           </div>
         </Modal>

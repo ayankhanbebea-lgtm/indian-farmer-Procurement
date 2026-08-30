@@ -40,13 +40,15 @@ export async function GET(req: NextRequest) {
   const allRows = db
     .prepare(
       `SELECT b.id, b.token, b.status, b.quantity_quintal as quantityQuintal, b.actual_quantity as actualQuantity,
-              b.created_at as createdAt, b.updated_at as updatedAt,
+              b.quality_grade as qualityGrade, b.created_at as createdAt, b.updated_at as updatedAt,
               u.name as farmerName, u.phone as farmerPhone,
               c.id as centreId, c.name as centreName, c.code as centreCode,
-              cr.name as cropName, cr.code as cropCode,
+              cr.name as cropName, cr.code as cropCode, COALESCE(cr.msp_rate, 2275) as cropMsp,
               s.date as slotDate, s.start_time as startTime, s.end_time as endTime,
               COALESCE(q.position, 1) as position, q.called_at as calledAt,
-              p.status as paymentStatus, p.amount as paymentAmount
+              COALESCE(p.payment_status, p.status) as paymentStatus,
+              COALESCE(p.total_amount, p.amount) as paymentAmount,
+              p.rate_per_unit as ratePerUnit, p.transaction_id as transactionId
        FROM bookings b
        JOIN slots s ON b.slot_id = s.id
        JOIN farmer_profiles fp ON b.farmer_id = fp.id

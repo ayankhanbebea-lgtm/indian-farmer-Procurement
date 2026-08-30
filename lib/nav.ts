@@ -5,6 +5,7 @@ import {
   UserCheck,
   CalendarDays,
   ListOrdered,
+  CreditCard,
   BarChart2,
   ScrollText,
 } from "lucide-react";
@@ -14,6 +15,7 @@ import { TranslationKeys } from "@/lib/i18n";
 export function getAdminLinks(t: (key: TranslationKeys) => string): NavLink[] {
   return [
     { href: "/admin", label: t("overview"), icon: LayoutGrid },
+    { href: "/admin/payments", label: t("payments"), icon: CreditCard },
     { href: "/admin/centres", label: t("centres"), icon: Building2 },
     { href: "/admin/staff", label: t("staffManagement"), icon: Users },
     { href: "/admin/farmers", label: t("farmerManagement"), icon: UserCheck },
@@ -26,6 +28,7 @@ export function getAdminLinks(t: (key: TranslationKeys) => string): NavLink[] {
 
 export const ADMIN_LINKS: NavLink[] = [
   { href: "/admin", label: "Overview", icon: LayoutGrid },
+  { href: "/admin/payments", label: "Payments", icon: CreditCard },
   { href: "/admin/centres", label: "Centres", icon: Building2 },
   { href: "/admin/staff", label: "Staff", icon: Users },
   { href: "/admin/farmers", label: "Farmers", icon: UserCheck },

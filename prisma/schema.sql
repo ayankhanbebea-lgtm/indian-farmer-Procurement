@@ -66,7 +66,8 @@ CREATE TABLE IF NOT EXISTS centre_staff (
 CREATE TABLE IF NOT EXISTS crops (
   id TEXT PRIMARY KEY,
   name TEXT UNIQUE NOT NULL,
-  code TEXT UNIQUE NOT NULL
+  code TEXT UNIQUE NOT NULL,
+  msp_rate REAL NOT NULL DEFAULT 2275
 );
 
 CREATE TABLE IF NOT EXISTS slots (
@@ -114,13 +115,32 @@ CREATE INDEX IF NOT EXISTS idx_queue_centre_date ON queue_entries(centre_id, dat
 CREATE TABLE IF NOT EXISTS payments (
   id TEXT PRIMARY KEY,
   booking_id TEXT UNIQUE NOT NULL REFERENCES bookings(id),
+  farmer_id TEXT NOT NULL REFERENCES farmer_profiles(id),
+  farmer_name TEXT NOT NULL,
+  procurement_centre_id TEXT NOT NULL REFERENCES procurement_centres(id),
+  crop TEXT NOT NULL,
+  final_quantity REAL NOT NULL,
+  quantity_unit TEXT NOT NULL DEFAULT 'Quintal',
+  rate_per_unit REAL NOT NULL,
+  total_amount REAL NOT NULL,
   amount REAL,
-  status TEXT NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING','PROCESSING','PAID','FAILED')),
-  reference_no TEXT UNIQUE,
+  payment_status TEXT NOT NULL DEFAULT 'PENDING' CHECK (payment_status IN ('PENDING','PROCESSING','PAID','FAILED','ON_HOLD')),
+  status TEXT DEFAULT 'PENDING',
+  payment_method TEXT,
+  bank_account_last4 TEXT,
+  upi_id TEXT,
+  transaction_id TEXT,
+  reference_no TEXT,
+  failure_reason TEXT,
+  hold_reason TEXT,
+  initiated_at TEXT,
   paid_at TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+CREATE INDEX IF NOT EXISTS idx_payments_farmer_id ON payments(farmer_id);
+CREATE INDEX IF NOT EXISTS idx_payments_status ON payments(payment_status);
+CREATE INDEX IF NOT EXISTS idx_payments_centre ON payments(procurement_centre_id);
 
 CREATE TABLE IF NOT EXISTS notifications (
   id TEXT PRIMARY KEY,

@@ -10,7 +10,7 @@ import QueueRail from "@/components/QueueRail";
 import EmptyState from "@/components/EmptyState";
 import { CardSkeleton } from "@/components/Skeleton";
 import { formatDate } from "@/lib/format";
-import { CalendarPlus, History, MapPin, Wheat, AlertCircle, RefreshCw } from "lucide-react";
+import { CalendarPlus, History, MapPin, Wheat, AlertCircle, RefreshCw, CreditCard } from "lucide-react";
 import { useLanguage } from "@/lib/i18n/context";
 
 type Me = { id: string; name: string; role: string; language?: string };
@@ -248,30 +248,35 @@ export default function FarmerHome() {
         )}
 
         {/* QUICK ACTION TILES */}
-        <div className="grid grid-cols-2 gap-3 pt-2">
+        <div className="grid grid-cols-3 gap-2.5 pt-2">
           {isMaxReached ? (
-            <div className="card opacity-60 bg-surface-sunken border-line cursor-not-allowed select-none p-4">
-              <CalendarPlus className="text-ink-faint mb-2" size={20} />
-              <div className="flex items-center gap-1.5">
-                <p className="font-semibold text-sm text-ink-faint">{t("bookNewSlot")}</p>
-                <span className="text-[9px] font-bold bg-amber-100 text-amber-800 px-1 py-0.5 rounded">3/3</span>
-              </div>
-              <p className="text-[11px] text-ink-faint mt-0.5">Limit reached (Max 3)</p>
+            <div className="card opacity-60 bg-surface-sunken border-line cursor-not-allowed select-none p-3 text-center">
+              <CalendarPlus className="text-ink-faint mx-auto mb-1.5" size={18} />
+              <p className="font-semibold text-xs text-ink-faint">{t("bookNewSlot")}</p>
+              <span className="text-[9px] font-bold bg-amber-100 text-amber-800 px-1 py-0.5 rounded mt-1 inline-block">
+                Limit (3/3)
+              </span>
             </div>
           ) : (
-            <Link href="/farmer/book" className="card hover:border-brand-600/40 transition-colors p-4">
-              <CalendarPlus className="text-brand-600 mb-2" size={20} />
-              <p className="font-semibold text-sm text-ink">{t("bookNewSlot")}</p>
-              <p className="text-xs text-ink-faint mt-0.5">
-                {activeCount > 0 ? `${maxLimit - activeCount} slot(s) available` : t("bookSlot")}
+            <Link href="/farmer/book" className="card hover:border-brand-600/40 transition-colors p-3 text-center">
+              <CalendarPlus className="text-brand-600 mx-auto mb-1.5" size={18} />
+              <p className="font-semibold text-xs text-ink">{t("bookNewSlot")}</p>
+              <p className="text-[10px] text-ink-faint mt-0.5">
+                {activeCount > 0 ? `${maxLimit - activeCount} left` : "Book now"}
               </p>
             </Link>
           )}
 
-          <Link href="/farmer/history" className="card hover:border-brand-600/40 transition-colors p-4">
-            <History className="text-brand-600 mb-2" size={20} />
-            <p className="font-semibold text-sm text-ink">{t("myHistory")}</p>
-            <p className="text-xs text-ink-faint mt-0.5">{t("history")}</p>
+          <Link href="/farmer/payments" className="card hover:border-brand-600/40 transition-colors p-3 text-center bg-gradient-to-br from-emerald-50/50 to-white">
+            <CreditCard className="text-emerald-700 mx-auto mb-1.5" size={18} />
+            <p className="font-semibold text-xs text-ink">{t("payments")}</p>
+            <p className="text-[10px] text-emerald-700 font-semibold mt-0.5">DBT Status & Receipts</p>
+          </Link>
+
+          <Link href="/farmer/history" className="card hover:border-brand-600/40 transition-colors p-3 text-center">
+            <History className="text-brand-600 mx-auto mb-1.5" size={18} />
+            <p className="font-semibold text-xs text-ink">{t("myHistory")}</p>
+            <p className="text-[10px] text-ink-faint mt-0.5">All visits</p>
           </Link>
         </div>
       </div>

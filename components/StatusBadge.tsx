@@ -1,5 +1,5 @@
 import { label, colorFor } from "@/lib/format";
-import { Circle, Clock, AlertTriangle, MapPin, Layers, CheckCircle2, Wallet, XCircle } from "lucide-react";
+import { Circle, Clock, AlertTriangle, MapPin, Layers, CheckCircle2, Wallet, XCircle, PauseCircle } from "lucide-react";
 
 const STATUS_ICON: Record<string, any> = {
   BOOKED: Circle,
@@ -16,6 +16,7 @@ const STATUS_ICON: Record<string, any> = {
   PROCESSING: Wallet,
   PAID: CheckCircle2,
   FAILED: XCircle,
+  ON_HOLD: PauseCircle,
 };
 
 export default function StatusBadge({ status }: { status: string }) {

@@ -15,11 +15,19 @@ export async function GET() {
   const bookings = db
     .prepare(
       `SELECT b.id, b.token, b.status, b.quantity_quintal as quantityQuintal, b.actual_quantity as actualQuantity,
-              b.created_at as createdAt,
+              b.quality_grade as qualityGrade, b.created_at as createdAt,
               c.name as cropName, c.code as cropCode,
               ctr.name as centreName, ctr.code as centreCode,
               s.date, s.start_time as startTime, s.end_time as endTime,
-              p.status as paymentStatus, p.amount as paymentAmount, p.reference_no as paymentReference
+              p.id as paymentId,
+              COALESCE(p.payment_status, p.status) as paymentStatus,
+              p.rate_per_unit as ratePerUnit,
+              COALESCE(p.total_amount, p.amount) as paymentAmount,
+              COALESCE(p.transaction_id, p.reference_no) as paymentReference,
+              p.payment_method as paymentMethod,
+              p.paid_at as paidAt,
+              p.bank_account_last4 as bankAccountLast4,
+              p.upi_id as upiId
        FROM bookings b
        JOIN crops c ON b.crop_id = c.id
        JOIN procurement_centres ctr ON b.centre_id = ctr.id

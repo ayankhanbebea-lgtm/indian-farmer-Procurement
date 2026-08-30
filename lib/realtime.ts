@@ -14,10 +14,12 @@ export function getRealtimeHub(): EventEmitter {
 }
 
 export type RealtimeEvent = {
-  type: "BOOKING_CREATED" | "BOOKING_UPDATED" | "STATUS_CHANGED" | "QUEUE_ADVANCED" | "CALL_NEXT";
+  type: "BOOKING_CREATED" | "BOOKING_UPDATED" | "STATUS_CHANGED" | "QUEUE_ADVANCED" | "CALL_NEXT" | "PAYMENT_CREATED" | "PAYMENT_UPDATED";
   centreId?: string;
   farmerId?: string;
   bookingId?: string;
+  paymentId?: string;
+  paymentStatus?: string;
   status?: string;
   timestamp: string;
 };

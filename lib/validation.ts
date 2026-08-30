@@ -50,7 +50,26 @@ export const staffActionSchema = z.object({
     "MARK_NO_SHOW",
   ]),
   actualQuantity: z.coerce.number().positive().optional(),
+  ratePerUnit: z.coerce.number().positive().optional(),
   qualityGrade: z.string().optional(),
   remarks: z.string().optional(),
   amount: z.coerce.number().positive().optional(),
+});
+
+export const adminPaymentActionSchema = z.object({
+  paymentId: z.string().min(1),
+  action: z.enum([
+    "START_PROCESSING",
+    "MARK_PAID",
+    "MARK_FAILED",
+    "PUT_ON_HOLD",
+    "RESUME_PAYMENT",
+  ]),
+  paymentMethod: z.enum(["DBT", "NEFT", "RTGS", "PFMS", "UPI", "Bank Transfer"]).optional(),
+  transactionId: z.string().trim().optional(),
+  bankAccountLast4: z.string().trim().max(4).optional(),
+  upiId: z.string().trim().optional(),
+  paidAt: z.string().optional(),
+  failureReason: z.string().optional(),
+  holdReason: z.string().optional(),
 });

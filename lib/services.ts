@@ -341,13 +341,26 @@ export function adminOverview() {
     }
   ).c;
   const pendingPayments = (
-    db.prepare(`SELECT COUNT(*) as c FROM payments WHERE status IN ('PENDING','PROCESSING')`).get() as { c: number }
+    db.prepare(`SELECT COUNT(*) as c FROM payments WHERE payment_status IN ('PENDING','PROCESSING') OR status IN ('PENDING','PROCESSING')`).get() as { c: number }
   ).c;
   const cancelled = (db.prepare(`SELECT COUNT(*) as c FROM bookings WHERE status IN ('CANCELLED','NO_SHOW')`).get() as {
     c: number;
   }).c;
   const totalBookings = (db.prepare(`SELECT COUNT(*) as c FROM bookings`).get() as { c: number }).c;
   const noShowRate = totalBookings ? Math.round((cancelled / totalBookings) * 1000) / 10 : 0;
+
+  const paymentStats = db.prepare(`
+    SELECT
+      COUNT(id) as totalCount,
+      COALESCE(SUM(CASE WHEN payment_status = 'PAID' OR status = 'PAID' THEN COALESCE(total_amount, amount, 0) ELSE 0 END), 0) as paidAmount,
+      COALESCE(SUM(CASE WHEN payment_status IN ('PENDING', 'PROCESSING', 'ON_HOLD') OR status IN ('PENDING', 'PROCESSING') THEN COALESCE(total_amount, amount, 0) ELSE 0 END), 0) as pendingAmount,
+      COUNT(CASE WHEN payment_status = 'PENDING' OR (payment_status IS NULL AND status = 'PENDING') THEN 1 END) as pendingCount,
+      COUNT(CASE WHEN payment_status = 'PROCESSING' OR (payment_status IS NULL AND status = 'PROCESSING') THEN 1 END) as processingCount,
+      COUNT(CASE WHEN payment_status = 'PAID' OR (payment_status IS NULL AND status = 'PAID') THEN 1 END) as paidCount,
+      COUNT(CASE WHEN payment_status = 'FAILED' OR (payment_status IS NULL AND status = 'FAILED') THEN 1 END) as failedCount,
+      COUNT(CASE WHEN payment_status = 'ON_HOLD' THEN 1 END) as onHoldCount
+    FROM payments
+  `).get() as any;
 
   const centres = db.prepare(`SELECT id, name, code, district FROM procurement_centres ORDER BY name`).all() as {
     id: string;
@@ -357,5 +370,27 @@ export function adminOverview() {
   }[];
   const centreStatus = centres.map((c) => ({ ...c, ...centreLoad(c.id, today) }));
 
-  return { totalFarmers, totalStaff, totalCentres, todaysBookings, activeQueues, completed, pendingPayments, noShowRate, centreStatus, today };
+  return {
+    totalFarmers,
+    totalStaff,
+    totalCentres,
+    todaysBookings,
+    activeQueues,
+    completed,
+    completedProcurements: completed,
+    pendingPayments,
+    noShowRate,
+    centreStatus,
+    today,
+    paymentStats: {
+      totalCount: paymentStats?.totalCount || 0,
+      paidAmount: paymentStats?.paidAmount || 0,
+      pendingAmount: paymentStats?.pendingAmount || 0,
+      pendingCount: paymentStats?.pendingCount || 0,
+      processingCount: paymentStats?.processingCount || 0,
+      paidCount: paymentStats?.paidCount || 0,
+      failedCount: paymentStats?.failedCount || 0,
+      onHoldCount: paymentStats?.onHoldCount || 0,
+    },
+  };
 }

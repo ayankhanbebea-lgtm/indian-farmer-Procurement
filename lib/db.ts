@@ -27,7 +27,10 @@ export function getDb(): DatabaseSync {
     const dbPath = path.join(process.cwd(), "prisma", "dev.db");
     const db = new DatabaseSync(dbPath);
     db.exec("PRAGMA foreign_keys = ON;");
-    initSchema(db);
+    runMigrations(db);
+    try {
+      initSchema(db);
+    } catch {}
     runMigrations(db);
     global.__procurementDb = db;
   }
