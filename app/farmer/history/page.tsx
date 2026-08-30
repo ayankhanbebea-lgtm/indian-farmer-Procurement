@@ -129,7 +129,7 @@ export default function HistoryPage() {
                     </p>
                   </div>
                   <div className="text-right shrink-0 ml-2">
-                    {b.paymentAmount != null && (
+                    {b.paymentAmount != null && b.paymentAmount > 0 && (
                       <p className="font-bold text-sm text-emerald-600 tnum">{formatCurrency(b.paymentAmount)}</p>
                     )}
                     <ChevronDown

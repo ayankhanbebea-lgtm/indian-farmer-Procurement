@@ -18,18 +18,16 @@ export async function GET(req: NextRequest) {
 
   const db = getDb();
 
-  let centre = getStaffCentre(session.id);
-  if (!centre && session.role === "ADMIN" && requestedCentreId) {
-    const row = db.prepare(`SELECT id, name, code FROM procurement_centres WHERE id = ?`).get(requestedCentreId) as any;
-    if (row) centre = row;
-  }
-  if (!centre && session.role === "ADMIN") {
-    const firstCentre = db.prepare(`SELECT id, name, code FROM procurement_centres ORDER BY code ASC LIMIT 1`).get() as any;
-    if (firstCentre) centre = firstCentre;
+  let centre = requestedCentreId
+    ? (db.prepare(`SELECT id, name, code FROM procurement_centres WHERE id = ?`).get(requestedCentreId) as any)
+    : null;
+  if (!centre) centre = getStaffCentre(session.id);
+  if (!centre) {
+    centre = db.prepare(`SELECT id, name, code FROM procurement_centres ORDER BY code ASC LIMIT 1`).get() as any;
   }
 
   if (!centre) {
-    return NextResponse.json({ error: "No procurement centre assigned to this staff account." }, { status: 404 });
+    return NextResponse.json({ error: "No procurement centre found." }, { status: 404 });
   }
 
   // Filter by date if requested (unless "all")
@@ -47,8 +45,8 @@ export async function GET(req: NextRequest) {
               s.date as slotDate, s.start_time as startTime, s.end_time as endTime,
               COALESCE(q.position, 1) as position, q.called_at as calledAt,
               COALESCE(p.payment_status, p.status) as paymentStatus,
-              COALESCE(p.total_amount, p.amount) as paymentAmount,
-              p.rate_per_unit as ratePerUnit, p.transaction_id as transactionId
+              COALESCE(p.final_payable_amount, p.total_amount, p.amount) as paymentAmount,
+              p.rate_per_unit as ratePerUnit, p.deductions as deductions, p.transaction_id as transactionId
        FROM bookings b
        JOIN slots s ON b.slot_id = s.id
        JOIN farmer_profiles fp ON b.farmer_id = fp.id
@@ -68,14 +66,15 @@ export async function GET(req: NextRequest) {
     ? allRows
     : allRows.filter((r) => normalizeDateToYMD(r.slotDate) === activeDate);
 
-  console.log({
-    staffCentreId: centre.id,
-    staffCentreCode: centre.code,
-    selectedDate: activeDate,
-    queryStart,
-    queryEnd,
-    bookingsReceived: filteredRows.length,
-  });
+  console.log(`\n==================================================`);
+  console.log(`[STEP 3: STAFF FETCH] Raw records received by Staff BEFORE ANY FILTER: COUNT = ${allRows.length}`);
+  console.log(`  Staff Centre: ${centre.name} (${centre.code}, ID: ${centre.id})`);
+  console.log(`  All Raw Tokens in Centre:`, allRows.map((r) => `${r.token} (${r.farmerName})`));
+  console.log(`[STEP 4: FILTER]`);
+  console.log(`  After date filter (${activeDate}) = ${filteredRows.length}`);
+  console.log(`  After centre filter (${centre.code}) = ${filteredRows.length}`);
+  console.log(`  Filtered Tokens for UI:`, filteredRows.map((r) => `${r.token} (${r.farmerName})`));
+  console.log(`==================================================\n`);
 
 
   const summary = {

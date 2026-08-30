@@ -44,8 +44,14 @@ export function runMigrations(db: DatabaseSync) {
     db.exec(`UPDATE crops SET msp_rate = 5440 WHERE code = 'GRM'`);
   } catch {}
 
+  // Add `deductions` column to bookings if missing
+  try {
+    db.exec(`ALTER TABLE bookings ADD COLUMN deductions REAL DEFAULT 0`);
+  } catch {}
+
   // Migrate payments table columns safely
   const paymentColumns = [
+    `ALTER TABLE payments ADD COLUMN token_number TEXT`,
     `ALTER TABLE payments ADD COLUMN farmer_id TEXT REFERENCES farmer_profiles(id)`,
     `ALTER TABLE payments ADD COLUMN farmer_name TEXT`,
     `ALTER TABLE payments ADD COLUMN procurement_centre_id TEXT REFERENCES procurement_centres(id)`,
@@ -53,14 +59,23 @@ export function runMigrations(db: DatabaseSync) {
     `ALTER TABLE payments ADD COLUMN final_quantity REAL`,
     `ALTER TABLE payments ADD COLUMN quantity_unit TEXT NOT NULL DEFAULT 'Quintal'`,
     `ALTER TABLE payments ADD COLUMN rate_per_unit REAL`,
+    `ALTER TABLE payments ADD COLUMN deductions REAL DEFAULT 0`,
+    `ALTER TABLE payments ADD COLUMN final_payable_amount REAL`,
     `ALTER TABLE payments ADD COLUMN total_amount REAL`,
-    `ALTER TABLE payments ADD COLUMN payment_status TEXT NOT NULL DEFAULT 'PENDING'`,
+    `ALTER TABLE payments ADD COLUMN payment_status TEXT NOT NULL DEFAULT 'BANK_DETAILS_REQUIRED'`,
+    `ALTER TABLE payments ADD COLUMN account_holder_name TEXT`,
+    `ALTER TABLE payments ADD COLUMN bank_name TEXT`,
+    `ALTER TABLE payments ADD COLUMN account_number TEXT`,
+    `ALTER TABLE payments ADD COLUMN ifsc_code TEXT`,
+    `ALTER TABLE payments ADD COLUMN upi_id TEXT`,
     `ALTER TABLE payments ADD COLUMN payment_method TEXT`,
     `ALTER TABLE payments ADD COLUMN bank_account_last4 TEXT`,
-    `ALTER TABLE payments ADD COLUMN upi_id TEXT`,
+    `ALTER TABLE payments ADD COLUMN transaction_reference TEXT`,
     `ALTER TABLE payments ADD COLUMN transaction_id TEXT`,
     `ALTER TABLE payments ADD COLUMN failure_reason TEXT`,
     `ALTER TABLE payments ADD COLUMN hold_reason TEXT`,
+    `ALTER TABLE payments ADD COLUMN submitted_at TEXT`,
+    `ALTER TABLE payments ADD COLUMN processed_at TEXT`,
     `ALTER TABLE payments ADD COLUMN initiated_at TEXT`,
   ];
 
@@ -78,11 +93,35 @@ export function runMigrations(db: DatabaseSync) {
     db.exec(`CREATE INDEX IF NOT EXISTS idx_payments_centre ON payments(procurement_centre_id)`);
   } catch {}
 
-  // Backfill payment_status from status if needed, and sync total_amount with amount
+  // Backfill payment_status, crop, rate, final_payable_amount, token_number
   try {
-    db.exec(`UPDATE payments SET payment_status = status WHERE payment_status IS NULL AND status IS NOT NULL`);
-    db.exec(`UPDATE payments SET total_amount = amount WHERE total_amount IS NULL AND amount IS NOT NULL`);
-    db.exec(`UPDATE payments SET transaction_id = reference_no WHERE transaction_id IS NULL AND reference_no IS NOT NULL`);
+    db.exec(`
+      UPDATE payments
+      SET
+        farmer_id = COALESCE(payments.farmer_id, (SELECT farmer_id FROM bookings WHERE bookings.id = payments.booking_id)),
+        procurement_centre_id = COALESCE(payments.procurement_centre_id, (SELECT centre_id FROM bookings WHERE bookings.id = payments.booking_id)),
+        crop = COALESCE(payments.crop, (SELECT crops.name FROM bookings JOIN crops ON bookings.crop_id = crops.id WHERE bookings.id = payments.booking_id)),
+        final_quantity = COALESCE(payments.final_quantity, (SELECT COALESCE(actual_quantity, quantity_quintal) FROM bookings WHERE bookings.id = payments.booking_id)),
+        rate_per_unit = COALESCE(payments.rate_per_unit, (SELECT COALESCE(crops.msp_rate, 2275) FROM bookings JOIN crops ON bookings.crop_id = crops.id WHERE bookings.id = payments.booking_id)),
+        token_number = COALESCE(payments.token_number, (SELECT token FROM bookings WHERE bookings.id = payments.booking_id)),
+        transaction_reference = COALESCE(transaction_reference, transaction_id, reference_no),
+        transaction_id = COALESCE(transaction_id, transaction_reference, reference_no)
+      WHERE payments.crop IS NULL OR payments.rate_per_unit IS NULL OR payments.final_quantity IS NULL OR payments.token_number IS NULL
+    `);
+
+    db.exec(`
+      UPDATE payments
+      SET
+        final_payable_amount = CASE
+          WHEN final_payable_amount IS NOT NULL AND final_payable_amount > 0 THEN final_payable_amount
+          ELSE ROUND(COALESCE(final_quantity, 1) * COALESCE(rate_per_unit, 2275) - COALESCE(deductions, 0), 2)
+        END,
+        total_amount = CASE
+          WHEN total_amount IS NOT NULL AND total_amount > 0 THEN total_amount
+          ELSE ROUND(COALESCE(final_quantity, 1) * COALESCE(rate_per_unit, 2275) - COALESCE(deductions, 0), 2)
+        END
+      WHERE final_payable_amount IS NULL OR final_payable_amount = 0
+    `);
   } catch {}
 
   // Ensure sessions table is present (created by schema.sql normally)

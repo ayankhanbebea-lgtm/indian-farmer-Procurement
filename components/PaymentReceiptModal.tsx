@@ -18,8 +18,11 @@ type PaymentReceiptProps = {
     finalQuantity: number;
     quantityUnit?: string;
     ratePerUnit: number;
+    deductions?: number;
+    finalPayableAmount?: number;
     totalAmount: number;
     paymentMethod?: string;
+    transactionReference?: string;
     transactionId?: string;
     referenceNo?: string;
     paidAt?: string;
@@ -33,12 +36,13 @@ type PaymentReceiptProps = {
 export default function PaymentReceiptModal({ payment, onClose }: PaymentReceiptProps) {
   const receiptRef = useRef<HTMLDivElement>(null);
 
-  const txnId = payment.transactionId || payment.referenceNo || `TXN-${payment.token}`;
-  const method = payment.paymentMethod || "DBT (Direct Benefit Transfer)";
+  const txnId = payment.transactionReference || payment.transactionId || payment.referenceNo || `TXN-${payment.token}`;
+  const method = payment.paymentMethod || "Bank Transfer";
   const quantity = payment.finalQuantity || 0;
   const unit = payment.quantityUnit || "Quintal";
   const rate = payment.ratePerUnit || 0;
-  const amount = payment.totalAmount || 0;
+  const deductions = payment.deductions || 0;
+  const amount = payment.finalPayableAmount || payment.totalAmount || 0;
   const dateStr = payment.paidAt ? formatDate(payment.paidAt) : formatDate(payment.createdAt);
 
   function handlePrint() {
@@ -136,9 +140,19 @@ export default function PaymentReceiptModal({ payment, onClose }: PaymentReceipt
                     {formatCurrency(rate)}
                   </td>
                   <td className="py-3 px-3 text-right font-mono font-bold text-ink text-sm">
-                    {formatCurrency(amount)}
+                    {formatCurrency(quantity * rate)}
                   </td>
                 </tr>
+                {deductions > 0 && (
+                  <tr className="text-rose-800 bg-rose-50/40">
+                    <td className="py-2 px-3 italic">Less: Statutory / Quality Deductions</td>
+                    <td className="py-2 px-3 text-right font-mono">—</td>
+                    <td className="py-2 px-3 text-right font-mono">—</td>
+                    <td className="py-2 px-3 text-right font-mono font-bold text-rose-700">
+                      -{formatCurrency(deductions)}
+                    </td>
+                  </tr>
+                )}
               </tbody>
               <tfoot className="bg-surface-sunken border-t border-line font-bold">
                 <tr>

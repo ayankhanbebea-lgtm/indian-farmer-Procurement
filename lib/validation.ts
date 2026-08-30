@@ -49,11 +49,23 @@ export const staffActionSchema = z.object({
     "SKIP",
     "MARK_NO_SHOW",
   ]),
-  actualQuantity: z.coerce.number().positive().optional(),
-  ratePerUnit: z.coerce.number().positive().optional(),
-  qualityGrade: z.string().optional(),
-  remarks: z.string().optional(),
-  amount: z.coerce.number().positive().optional(),
+  actualQuantity: z.coerce.number().optional().nullable(),
+  ratePerUnit: z.coerce.number().optional().nullable(),
+  deductions: z.coerce.number().optional().nullable().default(0),
+  qualityGrade: z.string().optional().nullable(),
+  remarks: z.string().optional().nullable(),
+  amount: z.coerce.number().optional().nullable(),
+});
+
+export const farmerBankDetailsSchema = z.object({
+  bookingId: z.string().min(1, "Booking ID is required"),
+  paymentId: z.string().min(1, "Payment ID is required"),
+  accountHolderName: z.string().trim().min(1, "Account holder name is required"),
+  bankName: z.string().trim().min(1, "Bank name is required"),
+  accountNumber: z.string().trim().min(3, "Account number must have at least 3 digits"),
+  confirmAccountNumber: z.string().trim().optional(),
+  ifscCode: z.string().trim().min(1, "IFSC code is required"),
+  upiId: z.string().trim().optional(),
 });
 
 export const adminPaymentActionSchema = z.object({
@@ -65,8 +77,9 @@ export const adminPaymentActionSchema = z.object({
     "PUT_ON_HOLD",
     "RESUME_PAYMENT",
   ]),
-  paymentMethod: z.enum(["DBT", "NEFT", "RTGS", "PFMS", "UPI", "Bank Transfer"]).optional(),
+  paymentMethod: z.enum(["DBT", "NEFT", "RTGS", "PFMS", "UPI", "Bank Transfer", "Other"]).optional(),
   transactionId: z.string().trim().optional(),
+  transactionReference: z.string().trim().optional(),
   bankAccountLast4: z.string().trim().max(4).optional(),
   upiId: z.string().trim().optional(),
   paidAt: z.string().optional(),

@@ -2,11 +2,16 @@ import crypto from "node:crypto";
 import { getDb, newId, nowIso } from "./db";
 import { sendSmsOtp, checkTwilioVerification } from "./sms";
 
-const OTP_EXPIRY_MINUTES = 5;
-const MAX_ATTEMPTS = 5;
-const RESEND_COOLDOWN_SECONDS = 30;
-const MAX_REQUESTS_PER_WINDOW = 3;
-const RATE_LIMIT_WINDOW_MINUTES = 10;
+export const OTP_DEMO_MODE =
+  process.env.OTP_DEMO_MODE !== undefined
+    ? process.env.OTP_DEMO_MODE === "true"
+    : true; // Default to demo mode for smooth hackathon testing unless explicitly set to "false"
+
+const OTP_EXPIRY_MINUTES = OTP_DEMO_MODE ? 10 : 5;
+const MAX_ATTEMPTS = OTP_DEMO_MODE ? 10 : 5;
+const RESEND_COOLDOWN_SECONDS = OTP_DEMO_MODE ? 10 : 30;
+const MAX_REQUESTS_PER_WINDOW = OTP_DEMO_MODE ? 1000 : 3;
+const RATE_LIMIT_WINDOW_MINUTES = OTP_DEMO_MODE ? 1 : 10;
 
 const OTP_SECRET = process.env.OTP_SECRET || process.env.JWT_SECRET || "smart-procurement-otp-salt-key";
 
@@ -60,7 +65,7 @@ export async function sendOtpToMobile(rawPhone: string): Promise<SendOtpResult> 
 
   const db = getDb();
 
-  // 1. Check resend cooldown (30 seconds)
+  // 1. Check resend cooldown (10 seconds in demo mode, 30 seconds in production mode)
   const lastOtp = db
     .prepare(
       `SELECT created_at FROM otps WHERE phone = ? ORDER BY created_at DESC LIMIT 1`
@@ -73,25 +78,27 @@ export async function sendOtpToMobile(rawPhone: string): Promise<SendOtpResult> 
       const waitTime = Math.ceil(RESEND_COOLDOWN_SECONDS - elapsedSeconds);
       return {
         ok: false,
-        error: `Please wait ${waitTime} seconds before requesting a new OTP.`,
+        error: `Please wait ${waitTime} second${waitTime > 1 ? "s" : ""} before requesting a new OTP.`,
         cooldownSeconds: waitTime,
       };
     }
   }
 
-  // 2. Check velocity rate limit (max 3 requests in 10 minutes)
-  const windowStart = new Date(Date.now() - RATE_LIMIT_WINDOW_MINUTES * 60 * 1000).toISOString();
-  const recentCount = (
-    db
-      .prepare(`SELECT COUNT(*) as c FROM otps WHERE phone = ? AND created_at >= ?`)
-      .get(phone, windowStart) as { c: number }
-  ).c;
+  // 2. Check velocity rate limit (bypassed in DEMO mode, active in strict production mode)
+  if (!OTP_DEMO_MODE) {
+    const windowStart = new Date(Date.now() - RATE_LIMIT_WINDOW_MINUTES * 60 * 1000).toISOString();
+    const recentCount = (
+      db
+        .prepare(`SELECT COUNT(*) as c FROM otps WHERE phone = ? AND created_at >= ?`)
+        .get(phone, windowStart) as { c: number }
+    ).c;
 
-  if (recentCount >= MAX_REQUESTS_PER_WINDOW) {
-    return {
-      ok: false,
-      error: `Too many OTP requests. Please wait ${RATE_LIMIT_WINDOW_MINUTES} minutes before trying again.`,
-    };
+    if (recentCount >= MAX_REQUESTS_PER_WINDOW) {
+      return {
+        ok: false,
+        error: `Too many OTP requests. Please wait ${RATE_LIMIT_WINDOW_MINUTES} minutes before trying again.`,
+      };
+    }
   }
 
   // 3. Generate secure OTP and calculate expiration

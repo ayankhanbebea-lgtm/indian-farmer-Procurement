@@ -33,6 +33,7 @@ const en = {
   goodAfternoon: "Good afternoon",
   goodEvening: "Good evening",
   tryAgain: "Try Again",
+  refresh: "Refresh",
   sync: "Sync",
 
   // Auth
@@ -138,6 +139,7 @@ const en = {
   waiting: "Waiting",
   inProgress: "In Progress",
   completed: "Completed",
+  mins: "mins",
   noQueueToday: "No farmers in queue today.",
   activeQueue: "Active Queue",
   todaysTotal: "Today's Total",
@@ -198,6 +200,8 @@ const en = {
   paymentPending: "Payment Pending",
   paymentProcessing: "Payment Processing",
   paymentCompleted: "Payment Completed",
+  bankDetailsRequired: "Bank Details Required",
+  bankDetailsSubmitted: "Bank Details Submitted",
   cancelled: "Cancelled",
   noShow: "No Show",
   onHold: "On Hold",

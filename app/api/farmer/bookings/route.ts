@@ -82,22 +82,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Duplicate active booking at same centre + date check
-    const duplicate = db
-      .prepare(
-        `SELECT b.id FROM bookings b JOIN slots s ON b.slot_id = s.id
-         WHERE b.farmer_id = ? AND b.centre_id = ? AND s.date = ?
-         AND b.status IN (${placeholders})`
-      )
-      .get(farmerId, centreId, date, ...ACTIVE_BOOKING_STATUSES);
-    if (duplicate) {
-      db.exec("ROLLBACK");
-      return NextResponse.json(
-        { error: "You already have an active booking for this centre and date." },
-        { status: 409 }
-      );
-    }
-
     // Atomic Slot capacity check inside immediate transaction
     const bookedCount = (
       db.prepare(`SELECT COUNT(*) as c FROM bookings WHERE slot_id = ? AND status != 'CANCELLED'`).get(slotId) as {
@@ -124,6 +108,22 @@ export async function POST(req: NextRequest) {
 
     db.exec("COMMIT");
 
+    console.log(`\n==================================================`);
+    console.log(`[STEP 1: CREATE] Token created: ${token} (Booking ID: ${bookingId})`);
+    console.log(`  Farmer ID: ${farmerId}, Centre ID: ${centreId}, Date: ${date}, Crop: ${cropCode}`);
+
+    const allFarmerActive = db.prepare(`
+      SELECT b.id, b.token, b.farmer_id as farmerId, b.status, b.centre_id as centreId, s.date
+      FROM bookings b
+      JOIN slots s ON b.slot_id = s.id
+      WHERE b.farmer_id = ? AND b.status IN ('BOOKED', 'ARRIVED', 'VERIFIED', 'WEIGHING', 'PROCUREMENT_IN_PROGRESS', 'PAYMENT_PROCESSING')
+    `).all(farmerId);
+
+    console.log(`[STEP 2: STORAGE] Raw active booking records immediately after creation:`);
+    console.log(JSON.stringify(allFarmerActive, null, 2));
+    console.log(`  TOTAL ACTIVE RECORDS FOR THIS FARMER: ${allFarmerActive.length}`);
+    console.log(`==================================================\n`);
+
     sendNotification(
       session.id,
       "BOOKING_CONFIRMED",
@@ -138,6 +138,8 @@ export async function POST(req: NextRequest) {
       centreId,
       farmerId,
       bookingId,
+      token,
+      date,
       status: "BOOKED",
     });
 

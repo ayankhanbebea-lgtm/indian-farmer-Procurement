@@ -4,12 +4,14 @@ export const STATUS_LABELS: Record<string, string> = {
   VERIFIED: "Verified",
   WEIGHING: "Weighing",
   PROCUREMENT_IN_PROGRESS: "Processing",
-  PROCUREMENT_COMPLETED: "Procurement completed",
-  PAYMENT_PROCESSING: "Payment processing",
-  PAYMENT_COMPLETED: "Payment completed",
+  PROCUREMENT_COMPLETED: "Procurement Completed",
+  BANK_DETAILS_REQUIRED: "Bank Details Required",
+  BANK_DETAILS_SUBMITTED: "Bank Details Submitted",
+  PAYMENT_PROCESSING: "Payment Processing",
+  PAYMENT_COMPLETED: "Payment Completed",
   CANCELLED: "Cancelled",
   NO_SHOW: "No-show",
-  PENDING: "Pending",
+  PENDING: "Payment Pending",
   PROCESSING: "Processing",
   PAID: "Paid",
   FAILED: "Failed",
@@ -23,6 +25,8 @@ export const STATUS_COLORS: Record<string, string> = {
   WEIGHING: "bg-indigo-50 text-indigo-800",
   PROCUREMENT_IN_PROGRESS: "bg-amber-50 text-amber-800",
   PROCUREMENT_COMPLETED: "bg-emerald-100 text-emerald-800",
+  BANK_DETAILS_REQUIRED: "bg-amber-100 text-amber-900 border border-amber-300",
+  BANK_DETAILS_SUBMITTED: "bg-sky-100 text-sky-900 border border-sky-300",
   PAYMENT_PROCESSING: "bg-sky-100 text-sky-800",
   PAYMENT_COMPLETED: "bg-emerald-100 text-emerald-800",
   CANCELLED: "bg-slate-100 text-slate-600",
@@ -33,6 +37,14 @@ export const STATUS_COLORS: Record<string, string> = {
   FAILED: "bg-rose-100 text-rose-800",
   ON_HOLD: "bg-orange-100 text-orange-800",
 };
+
+export function maskAccountNumber(acc?: string | null): string {
+  if (!acc) return "—";
+  const str = String(acc).trim();
+  if (str.length <= 4) return str;
+  const last4 = str.slice(-4);
+  return `XXXX XXXX ${last4}`;
+}
 
 export function label(status?: string | null) {
   if (!status) return "—";

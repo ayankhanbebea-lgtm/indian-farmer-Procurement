@@ -1,5 +1,5 @@
 import { label, colorFor } from "@/lib/format";
-import { Circle, Clock, AlertTriangle, MapPin, Layers, CheckCircle2, Wallet, XCircle, PauseCircle } from "lucide-react";
+import { Circle, Clock, AlertTriangle, MapPin, Layers, CheckCircle2, Wallet, XCircle, PauseCircle, Building2, FileCheck2 } from "lucide-react";
 
 const STATUS_ICON: Record<string, any> = {
   BOOKED: Circle,
@@ -8,6 +8,8 @@ const STATUS_ICON: Record<string, any> = {
   WEIGHING: Layers,
   PROCUREMENT_IN_PROGRESS: Layers,
   PROCUREMENT_COMPLETED: CheckCircle2,
+  BANK_DETAILS_REQUIRED: Building2,
+  BANK_DETAILS_SUBMITTED: FileCheck2,
   PAYMENT_PROCESSING: Wallet,
   PAYMENT_COMPLETED: Wallet,
   CANCELLED: XCircle,

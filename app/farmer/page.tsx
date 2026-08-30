@@ -1,59 +1,63 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import FarmerTopBar from "@/components/FarmerTopBar";
 import FarmerNav from "@/components/FarmerNav";
 import StatusBadge from "@/components/StatusBadge";
 import QueueRail from "@/components/QueueRail";
-import EmptyState from "@/components/EmptyState";
 import { CardSkeleton } from "@/components/Skeleton";
-import { formatDate } from "@/lib/format";
-import { CalendarPlus, History, MapPin, Wheat, AlertCircle, RefreshCw, CreditCard } from "lucide-react";
+import FarmerBankDetailsModal from "@/components/FarmerBankDetailsModal";
+import PaymentReceiptModal from "@/components/PaymentReceiptModal";
+import { formatCurrency, formatDate } from "@/lib/format";
 import { useLanguage } from "@/lib/i18n/context";
+import {
+  CalendarPlus,
+  Wheat,
+  MapPin,
+  Clock,
+  AlertCircle,
+  RefreshCw,
+  CreditCard,
+  Building2,
+  CheckCircle2,
+  ArrowRight,
+  ShieldCheck,
+  FileText,
+  Plus,
+  Layers,
+  ChevronRight,
+  Receipt,
+  Sparkles,
+  History,
+} from "lucide-react";
 
-type Me = { id: string; name: string; role: string; language?: string };
-type Booking = {
-  id: string;
-  token: string;
-  status: string;
-  cropName: string;
-  centreName: string;
-  date: string;
-  startTime: string;
-  endTime: string;
-  quantityQuintal: number;
-  farmersAhead: number;
-  estimatedWaitMins: number;
-  currentlyServing: string | null;
-  statusMessage: string;
-};
-
-export default function FarmerHome() {
+export default function FarmerHomePage() {
+  const { t, setLang } = useLanguage();
   const router = useRouter();
-  const { lang, setLang, t } = useLanguage();
-  const [me, setMe] = useState<Me | null>(null);
-  const [bookings, setBookings] = useState<Booking[]>([]);
-  const [activeCount, setActiveCount] = useState(0);
-  const [maxLimit, setMaxLimit] = useState(3);
-  const [isMaxReached, setIsMaxReached] = useState(false);
+
+  const [me, setMe] = useState<any>(null);
+  const [bookings, setBookings] = useState<any[]>([]);
+  const [payments, setPayments] = useState<any[]>([]);
+  const [activeCount, setActiveCount] = useState<number>(0);
+  const [maxLimit, setMaxLimit] = useState<number>(3);
+  const [isMaxReached, setIsMaxReached] = useState<boolean>(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Bank Details Modal state
+  const [modalPayment, setModalPayment] = useState<any | null>(null);
+  // Receipt Modal state
+  const [receiptPayment, setReceiptPayment] = useState<any | null>(null);
+
   const loadData = useCallback(async (isInitial = false) => {
-    if (isInitial) {
-      setLoading(true);
-      setError(null);
-    }
+    if (isInitial) setLoading(true);
     try {
-      // 1. Fetch current user session
+      // 1. Fetch authenticated user profile
       const meRes = await fetch("/api/auth/me");
-      if (!meRes.ok) {
-        throw new Error("Unable to verify user session.");
-      }
       const meData = await meRes.json();
-      if (!meData.user) {
+      if (!meRes.ok || !meData.user) {
         router.push("/login");
         return;
       }
@@ -68,7 +72,7 @@ export default function FarmerHome() {
         setLang(meData.user.language);
       }
 
-      // 2. Fetch current active bookings (up to 3)
+      // 2. Fetch current active bookings from real database
       const bRes = await fetch("/api/farmer/current");
       if (!bRes.ok) {
         if (bRes.status === 401) {
@@ -82,6 +86,18 @@ export default function FarmerHome() {
       setActiveCount(bData.activeCount ?? (bData.bookings ? bData.bookings.length : (bData.booking ? 1 : 0)));
       setMaxLimit(bData.maxLimit ?? 3);
       setIsMaxReached(Boolean(bData.isMaxReached));
+
+      // 3. Fetch completed procurements and payments from real database
+      try {
+        const pRes = await fetch("/api/farmer/payments");
+        if (pRes.ok) {
+          const pData = await pRes.json();
+          setPayments(pData.payments || []);
+        }
+      } catch (pErr) {
+        console.error("[Farmer Dashboard Payments Error]", pErr);
+      }
+
       setError(null);
     } catch (err: any) {
       console.error("[FarmerHome Error]", err);
@@ -121,20 +137,31 @@ export default function FarmerHome() {
     };
   }, [loadData]);
 
+  // Payment groupings
+  const bankRequiredList = payments.filter((p) => p.paymentStatus === "BANK_DETAILS_REQUIRED");
+  const inProgressPaymentList = payments.filter(
+    (p) => p.paymentStatus === "BANK_DETAILS_SUBMITTED" || p.paymentStatus === "PROCESSING" || p.paymentStatus === "ON_HOLD"
+  );
+  const paidPaymentList = payments.filter((p) => p.paymentStatus === "PAID");
+
+  const hasAnyPayments = payments.length > 0;
+
   return (
-    <main className="min-h-screen pb-24 bg-surface">
+    <main className="min-h-screen pb-28 bg-surface">
+      {/* 1. TOP SECTION — FARMER WELCOME */}
       <FarmerTopBar name={me?.name || "Farmer"} />
-      <div className="max-w-lg mx-auto px-4 py-4 space-y-4">
+
+      <div className="max-w-lg mx-auto px-4 py-4 space-y-5">
         {/* ERROR STATE */}
         {error && (
-          <div className="panel border-error/30 bg-error/5 p-4 space-y-3">
+          <div className="panel border-error/30 bg-error/5 p-4 space-y-3 animate-rise-in">
             <div className="flex items-center gap-2 text-error">
               <AlertCircle size={18} />
               <p className="font-semibold text-sm">{error}</p>
             </div>
             <button
               onClick={() => loadData(true)}
-              className="btn-secondary !py-1.5 !px-3 text-xs inline-flex items-center gap-1.5"
+              className="btn-secondary !py-1.5 !px-3 text-xs inline-flex items-center gap-1.5 font-bold"
             >
               <RefreshCw size={13} /> {t("tryAgain")}
             </button>
@@ -142,146 +169,387 @@ export default function FarmerHome() {
         )}
 
         {/* LOADING STATE */}
-        {loading && <CardSkeleton />}
-
-        {/* ACTIVE TOKENS SECTION HEADER & WARNING */}
-        {!loading && !error && bookings.length > 0 && (
-          <div className="flex items-center justify-between">
-            <h2 className="text-xs font-bold text-ink uppercase tracking-wider flex items-center gap-1.5">
-              <span>My Active Tokens</span>
-              <span className={`px-2 py-0.5 rounded-full text-[11px] font-mono font-bold ${
-                isMaxReached ? "bg-amber-100 text-amber-800" : "bg-brand-50 text-brand-700"
-              }`}>
-                {activeCount} / {maxLimit}
-              </span>
-            </h2>
-            {isMaxReached ? (
-              <span className="text-[11px] font-semibold text-amber-700">Max limit reached</span>
-            ) : (
-              <Link href="/farmer/book" className="text-xs font-bold text-brand-600 hover:text-brand-700 underline">
-                + Book Another ({maxLimit - activeCount} left)
-              </Link>
-            )}
-          </div>
-        )}
-
-        {/* MAX LIMIT REACHED BANNER */}
-        {!loading && !error && isMaxReached && (
-          <div className="panel border-amber-200 bg-amber-50 p-3.5 flex items-start gap-2.5 text-xs text-amber-900 animate-rise-in">
-            <AlertCircle size={16} className="text-amber-600 shrink-0 mt-0.5" />
-            <p className="leading-relaxed">
-              <strong>Maximum 3 active tokens reached.</strong> Please wait until one of your existing bookings is completed or cleared before booking another slot.
-            </p>
-          </div>
-        )}
-
-        {/* SUCCESS STATE - NO ACTIVE BOOKING */}
-        {!loading && !error && bookings.length === 0 && (
-          <EmptyState
-            icon={CalendarPlus}
-            title={t("noActiveBooking")}
-            description={t("noActiveBookingDesc")}
-            actionLabel={t("bookSlot")}
-            actionHref="/farmer/book"
-          />
-        )}
-
-        {/* SUCCESS STATE - MULTIPLE ACTIVE BOOKINGS */}
-        {!loading && !error && bookings.length > 0 && (
+        {loading && (
           <div className="space-y-4">
-            {bookings.map((b, idx) => (
-              <div key={b.id} className="panel relative overflow-hidden animate-rise-in">
-                <div className="p-5">
-                  <div className="flex items-center justify-between mb-1">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold text-ink-faint uppercase tracking-wide">
-                        Token #{idx + 1}
-                      </span>
-                      <span className="font-display font-black text-xl text-grain font-mono">
-                        {b.token}
-                      </span>
+            <CardSkeleton />
+            <CardSkeleton />
+          </div>
+        )}
+
+        {!loading && !error && (
+          <>
+            {/* 2. PRIMARY SECTION — PROCUREMENT BOOKING */}
+            <section className="space-y-2">
+              <div className="panel bg-gradient-to-br from-brand-900 via-brand-800 to-brand-950 text-white p-5 shadow-lg relative overflow-hidden">
+                {/* Background decorative wheat badge */}
+                <div className="absolute right-[-10px] bottom-[-15px] opacity-10 pointer-events-none">
+                  <Wheat size={140} />
+                </div>
+
+                <div className="relative z-10 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/15 text-white text-[11px] font-bold tracking-wide backdrop-blur-xs">
+                      <Sparkles size={13} className="text-amber-300" />
+                      <span>Smart Mandi Portal</span>
                     </div>
-                    <StatusBadge status={b.status} />
+
+                    <span className="text-[11px] font-mono font-semibold text-white/80 bg-black/20 px-2 py-0.5 rounded">
+                      Active: {activeCount} / {maxLimit}
+                    </span>
                   </div>
 
-                  <div className="flex items-center gap-1.5 text-sm text-ink-soft mt-2">
-                    <Wheat size={14} className="text-brand-600 shrink-0" />
-                    <span className="font-semibold text-ink">{b.cropName}</span>
-                    <span className="tnum">· {b.quantityQuintal} Quintal</span>
-                  </div>
-                  <div className="flex items-center gap-1.5 text-sm text-ink-soft mt-1">
-                    <MapPin size={14} className="text-brand-600 shrink-0" />
-                    <span>{b.centreName}</span>
-                  </div>
-                  <p className="text-xs text-ink-faint mt-1">
-                    {formatDate(b.date)} · {b.startTime} – {b.endTime}
-                  </p>
-
-                  <div className="mt-3.5 pt-3 border-t border-line">
-                    <QueueRail
-                      servingToken={b.currentlyServing}
-                      farmersAhead={b.farmersAhead}
-                      myToken={b.token}
-                    />
+                  <div>
+                    <h2 className="font-display font-black text-xl text-white tracking-tight">
+                      Procurement Booking
+                    </h2>
+                    <p className="text-xs text-white/80 mt-1 leading-relaxed">
+                      Book a slot to sell your crop at a procurement centre.
+                    </p>
                   </div>
 
-                  <div className="mt-2 grid grid-cols-2 gap-2 text-center text-xs">
-                    <div className="bg-surface-sunken rounded-lg py-2">
-                      <p className="text-[10px] text-ink-faint">{t("estimatedWait")}</p>
-                      <p className="font-display font-bold text-ink tnum">{b.estimatedWaitMins} min</p>
-                    </div>
-                    <div className="bg-surface-sunken rounded-lg py-2 px-1">
-                      <p className="text-[10px] text-ink-faint">{t("status")}</p>
-                      <p className="font-display font-bold text-brand-600 text-xs leading-tight truncate mt-0.5">
-                        {b.statusMessage || t("yourTurnApproaching")}
-                      </p>
-                    </div>
-                  </div>
+                  <div className="pt-1 flex flex-col sm:flex-row gap-2.5">
+                    {isMaxReached ? (
+                      <div className="flex-1 p-2.5 rounded-xl bg-amber-500/20 border border-amber-400/40 text-amber-200 text-xs flex items-center justify-between">
+                        <span>Maximum 3 active tokens reached.</span>
+                        <Link
+                          href="/farmer/book"
+                          className="font-bold underline text-white hover:text-amber-200"
+                        >
+                          View Slots
+                        </Link>
+                      </div>
+                    ) : (
+                      <Link
+                        href="/farmer/book"
+                        className="flex-1 btn-primary !py-3 text-sm font-bold inline-flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white shadow-md border border-emerald-400/30 transition-all transform active:scale-[0.99]"
+                      >
+                        <Plus size={18} strokeWidth={2.5} />
+                        <span>+ Book New Slot</span>
+                      </Link>
+                    )}
 
-                  <Link href={`/farmer/queue?bookingId=${b.id}`} className="btn-primary w-full mt-3 !py-2 text-xs font-bold block text-center">
-                    {t("viewLiveQueue")} ({b.token})
-                  </Link>
+                    <Link
+                      href="/farmer/history"
+                      className="btn-secondary !py-3 !px-4 text-xs font-bold inline-flex items-center justify-center gap-1.5 bg-white/15 hover:bg-white/25 text-white border border-white/20 shadow-xs backdrop-blur-xs transition-all"
+                    >
+                      <History size={16} />
+                      <span>My History</span>
+                    </Link>
+                  </div>
                 </div>
               </div>
-            ))}
-          </div>
+            </section>
+
+            {/* 3. ACTIVE BOOKINGS SECTION */}
+            <section className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h2 className="text-xs font-bold text-ink uppercase tracking-wider flex items-center gap-1.5">
+                  <Layers size={15} className="text-brand-600" />
+                  <span>Your Active Bookings</span>
+                  <span
+                    className={`px-2 py-0.2 rounded-full text-[11px] font-mono font-bold ${
+                      isMaxReached ? "bg-amber-100 text-amber-800" : "bg-brand-50 text-brand-700"
+                    }`}
+                  >
+                    {activeCount}
+                  </span>
+                </h2>
+
+                {activeCount > 0 && !isMaxReached && (
+                  <Link
+                    href="/farmer/book"
+                    className="text-xs font-bold text-brand-600 hover:text-brand-700 underline"
+                  >
+                    + Add Another
+                  </Link>
+                )}
+              </div>
+
+              {/* ACTIVE BOOKINGS LIST */}
+              {bookings.length > 0 ? (
+                <div className="space-y-3">
+                  {bookings.map((b, idx) => (
+                    <div
+                      key={b.id}
+                      className="panel relative overflow-hidden bg-white border border-line p-4 shadow-sm animate-rise-in space-y-3"
+                    >
+                      <div className="flex items-center justify-between border-b border-line/60 pb-2.5">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[11px] font-bold text-ink-faint uppercase tracking-wide">
+                            Token #{idx + 1}
+                          </span>
+                          <span className="font-display font-black text-lg text-ink font-mono bg-surface px-2 py-0.5 rounded border border-line">
+                            {b.token}
+                          </span>
+                        </div>
+                        <StatusBadge status={b.status} />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        <div>
+                          <span className="text-[10px] text-ink-faint uppercase font-bold block">Crop & Quantity</span>
+                          <span className="font-semibold text-ink flex items-center gap-1 mt-0.5">
+                            <Wheat size={13} className="text-brand-600 shrink-0" />
+                            {b.cropName} · {b.quantityQuintal} Q
+                          </span>
+                        </div>
+
+                        <div>
+                          <span className="text-[10px] text-ink-faint uppercase font-bold block">Procurement Centre</span>
+                          <span className="font-semibold text-ink flex items-center gap-1 mt-0.5 truncate" title={b.centreName}>
+                            <MapPin size={13} className="text-brand-600 shrink-0" />
+                            {b.centreName}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="text-[11px] text-ink-faint flex items-center gap-1.5 pt-1">
+                        <Clock size={13} className="text-ink-faint shrink-0" />
+                        <span>
+                          {formatDate(b.date)} · {b.startTime} – {b.endTime}
+                        </span>
+                      </div>
+
+                      {/* Real-time Queue Tracking Rail */}
+                      <div className="pt-2 border-t border-line/70">
+                        <QueueRail
+                          servingToken={b.currentlyServing}
+                          farmersAhead={b.farmersAhead}
+                          myToken={b.token}
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2 text-center text-xs pt-1">
+                        <div className="bg-surface-sunken rounded-lg py-2">
+                          <p className="text-ink-faint text-[10px] uppercase font-bold tracking-wider">{t("farmersAhead")}</p>
+                          <p className="font-display font-black text-base text-ink mt-0.5">{b.farmersAhead}</p>
+                        </div>
+                        <div className="bg-surface-sunken rounded-lg py-2">
+                          <p className="text-ink-faint text-[10px] uppercase font-bold tracking-wider">{t("estimatedWait")}</p>
+                          <p className="font-display font-black text-base text-ink mt-0.5">
+                            ~{b.estimatedWaitMins} <span className="text-xs font-normal text-ink-faint">{t("mins")}</span>
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="panel bg-white border border-line p-5 text-center space-y-3">
+                  <div className="w-12 h-12 rounded-full bg-brand-50 text-brand-700 flex items-center justify-center mx-auto">
+                    <CalendarPlus size={24} />
+                  </div>
+                  <div>
+                    <p className="font-bold text-sm text-ink">No active bookings</p>
+                    <p className="text-xs text-ink-faint mt-0.5">
+                      Book a procurement slot to get started.
+                    </p>
+                  </div>
+                  <Link
+                    href="/farmer/book"
+                    className="btn-secondary !py-2 !px-4 text-xs font-bold inline-flex items-center gap-1.5"
+                  >
+                    <Plus size={14} />
+                    <span>Book a Slot</span>
+                  </Link>
+                </div>
+              )}
+            </section>
+
+            {/* 4. PAYMENT & DISBURSEMENTS SECTION (BELOW BOOKINGS) */}
+            <section className="space-y-3 pt-2">
+              <div className="flex items-center justify-between border-t border-line/80 pt-4">
+                <h2 className="text-xs font-bold text-ink uppercase tracking-wider flex items-center gap-1.5">
+                  <CreditCard size={15} className="text-emerald-700" />
+                  <span>Payments & Disbursements</span>
+                </h2>
+
+                {hasAnyPayments && (
+                  <Link
+                    href="/farmer/payments"
+                    className="text-xs font-bold text-brand-600 hover:text-brand-700 underline flex items-center gap-0.5"
+                  >
+                    <span>View All ({payments.length})</span>
+                    <ChevronRight size={13} />
+                  </Link>
+                )}
+              </div>
+
+              {/* A. ACTION REQUIRED (BANK_DETAILS_REQUIRED) */}
+              {bankRequiredList.length > 0 && (
+                <div className="space-y-2.5">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-amber-800 bg-amber-100/80 px-2 py-0.5 rounded inline-block">
+                    Action Required ({bankRequiredList.length})
+                  </span>
+
+                  {bankRequiredList.map((p) => (
+                    <div
+                      key={p.id || p.bookingId}
+                      className="panel bg-gradient-to-br from-amber-50 via-amber-50/80 to-orange-50/90 border-2 border-amber-400 p-4 shadow-sm animate-rise-in space-y-3"
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="space-y-0.5">
+                          <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 text-[10px] font-bold uppercase tracking-wide">
+                            <CheckCircle2 size={12} className="text-amber-700" />
+                            <span>Procurement Completed!</span>
+                          </div>
+                          <h3 className="font-display font-bold text-sm text-ink pt-0.5">
+                            Weighing confirmed for Token {p.token}
+                          </h3>
+                        </div>
+                        <StatusBadge status="BANK_DETAILS_REQUIRED" />
+                      </div>
+
+                      <div className="p-3 bg-white/90 rounded-xl border border-amber-200/80 flex items-center justify-between">
+                        <div>
+                          <span className="text-[10px] text-ink-faint uppercase font-bold block">
+                            Final Payable Amount
+                          </span>
+                          <span className="text-xs text-ink-soft font-semibold">
+                            {p.crop} · {p.finalQuantity} {p.quantityUnit || "Quintal"}
+                          </span>
+                        </div>
+                        <span className="font-display font-black text-xl text-emerald-800">
+                          {formatCurrency(p.finalPayableAmount || p.totalAmount)}
+                        </span>
+                      </div>
+
+                      <p className="text-xs text-amber-950 font-medium">
+                        Please provide your bank account details to receive your direct disbursement payment.
+                      </p>
+
+                      <button
+                        type="button"
+                        onClick={() => setModalPayment(p)}
+                        className="btn-primary w-full !py-2.5 text-xs font-bold inline-flex items-center justify-center gap-2 bg-amber-600 hover:bg-amber-700 shadow-sm text-white"
+                      >
+                        <Building2 size={15} />
+                        <span>Add Bank Details</span>
+                        <ArrowRight size={14} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* B. IN-PROGRESS / SUBMITTED */}
+              {inProgressPaymentList.length > 0 && (
+                <div className="space-y-2">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-sky-800 bg-sky-100/80 px-2 py-0.5 rounded inline-block">
+                    In Processing ({inProgressPaymentList.length})
+                  </span>
+
+                  {inProgressPaymentList.map((p) => (
+                    <div
+                      key={p.id || p.bookingId}
+                      className="panel bg-white border border-line p-3.5 space-y-2 animate-rise-in"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono font-bold text-xs text-ink">{p.token}</span>
+                          <span className="text-xs text-ink-soft font-semibold">{p.crop}</span>
+                        </div>
+                        <StatusBadge status={p.paymentStatus} />
+                      </div>
+
+                      <div className="p-2.5 rounded-lg bg-surface-sunken border border-line flex items-center justify-between text-xs">
+                        <div>
+                          <span className="text-[10px] text-ink-faint uppercase font-bold block">Payable Amount</span>
+                          <span className="font-display font-black text-emerald-800 text-sm">
+                            {formatCurrency(p.finalPayableAmount || p.totalAmount)}
+                          </span>
+                        </div>
+                        <div className="text-right">
+                          <span className="text-[10px] text-ink-faint uppercase font-bold block">Bank Account</span>
+                          <span className="font-mono font-semibold text-ink text-xs">
+                            {p.bankName ? `${p.bankName} · ` : ""}XXXX {p.bankAccountLast4 || "Bank"}
+                          </span>
+                        </div>
+                      </div>
+
+                      <p className="text-[11px] text-ink-faint">
+                        {p.paymentStatus === "BANK_DETAILS_SUBMITTED"
+                          ? "Bank details received. Awaiting Mandi Admin disbursement processing."
+                          : "Payment is currently processing for direct bank transfer."}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* C. PAID / RECENT DISBURSEMENTS */}
+              {paidPaymentList.length > 0 && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800 bg-emerald-100/80 px-2 py-0.5 rounded inline-block">
+                      Recent Disbursements ({paidPaymentList.length})
+                    </span>
+                  </div>
+
+                  {paidPaymentList.slice(0, 2).map((p) => (
+                    <div
+                      key={p.id || p.bookingId}
+                      className="panel bg-emerald-50/70 border border-emerald-200 p-3.5 flex items-center justify-between animate-rise-in shadow-2xs"
+                    >
+                      <div className="space-y-0.5">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono font-bold text-xs text-ink">{p.token}</span>
+                          <StatusBadge status="PAID" />
+                        </div>
+                        <p className="text-xs text-ink font-semibold">
+                          {p.crop} · <span className="font-black text-emerald-900">{formatCurrency(p.finalPayableAmount || p.totalAmount)}</span>
+                        </p>
+                        <p className="text-[10px] text-ink-faint font-mono">
+                          Txn: {p.transactionReference || p.transactionId || "Verified"}
+                        </p>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => setReceiptPayment(p)}
+                        className="btn-secondary !py-1.5 !px-3 text-xs font-bold inline-flex items-center gap-1 text-emerald-900 bg-white border-emerald-300 hover:bg-emerald-100 shadow-2xs"
+                      >
+                        <Receipt size={13} className="text-emerald-700" />
+                        <span>Receipt</span>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* NO PAYMENTS YET */}
+              {!hasAnyPayments && (
+                <div className="p-3.5 rounded-xl bg-surface-sunken border border-line text-center text-xs text-ink-faint">
+                  Completed procurement payments and receipts will appear here automatically.
+                </div>
+              )}
+            </section>
+          </>
         )}
-
-        {/* QUICK ACTION TILES */}
-        <div className="grid grid-cols-3 gap-2.5 pt-2">
-          {isMaxReached ? (
-            <div className="card opacity-60 bg-surface-sunken border-line cursor-not-allowed select-none p-3 text-center">
-              <CalendarPlus className="text-ink-faint mx-auto mb-1.5" size={18} />
-              <p className="font-semibold text-xs text-ink-faint">{t("bookNewSlot")}</p>
-              <span className="text-[9px] font-bold bg-amber-100 text-amber-800 px-1 py-0.5 rounded mt-1 inline-block">
-                Limit (3/3)
-              </span>
-            </div>
-          ) : (
-            <Link href="/farmer/book" className="card hover:border-brand-600/40 transition-colors p-3 text-center">
-              <CalendarPlus className="text-brand-600 mx-auto mb-1.5" size={18} />
-              <p className="font-semibold text-xs text-ink">{t("bookNewSlot")}</p>
-              <p className="text-[10px] text-ink-faint mt-0.5">
-                {activeCount > 0 ? `${maxLimit - activeCount} left` : "Book now"}
-              </p>
-            </Link>
-          )}
-
-          <Link href="/farmer/payments" className="card hover:border-brand-600/40 transition-colors p-3 text-center bg-gradient-to-br from-emerald-50/50 to-white">
-            <CreditCard className="text-emerald-700 mx-auto mb-1.5" size={18} />
-            <p className="font-semibold text-xs text-ink">{t("payments")}</p>
-            <p className="text-[10px] text-emerald-700 font-semibold mt-0.5">DBT Status & Receipts</p>
-          </Link>
-
-          <Link href="/farmer/history" className="card hover:border-brand-600/40 transition-colors p-3 text-center">
-            <History className="text-brand-600 mx-auto mb-1.5" size={18} />
-            <p className="font-semibold text-xs text-ink">{t("myHistory")}</p>
-            <p className="text-[10px] text-ink-faint mt-0.5">All visits</p>
-          </Link>
-        </div>
       </div>
+
+      {/* BANK DETAILS SUBMISSION MODAL */}
+      {modalPayment && (
+        <FarmerBankDetailsModal
+          payment={modalPayment}
+          onClose={() => setModalPayment(null)}
+          onSuccess={() => {
+            setModalPayment(null);
+            loadData(false);
+          }}
+        />
+      )}
+
+      {/* OFFICIAL RECEIPT MODAL */}
+      {receiptPayment && (
+        <PaymentReceiptModal
+          payment={receiptPayment}
+          onClose={() => setReceiptPayment(null)}
+        />
+      )}
+
+      {/* Bottom Navigation */}
       <FarmerNav />
     </main>
   );
 }
-

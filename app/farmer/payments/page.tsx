@@ -5,9 +5,10 @@ import FarmerTopBar from "@/components/FarmerTopBar";
 import FarmerNav from "@/components/FarmerNav";
 import StatusBadge from "@/components/StatusBadge";
 import PaymentReceiptModal from "@/components/PaymentReceiptModal";
+import FarmerBankDetailsModal from "@/components/FarmerBankDetailsModal";
 import EmptyState from "@/components/EmptyState";
 import { CardSkeleton } from "@/components/Skeleton";
-import { formatCurrency, formatDate } from "@/lib/format";
+import { formatCurrency, formatDate, maskAccountNumber } from "@/lib/format";
 import { useLanguage } from "@/lib/i18n/context";
 import {
   CreditCard,
@@ -21,6 +22,7 @@ import {
   FileCheck2,
   ArrowRight,
   ShieldCheck,
+  Building2,
 } from "lucide-react";
 
 export default function FarmerPaymentsPage() {
@@ -35,6 +37,7 @@ export default function FarmerPaymentsPage() {
   });
   const [me, setMe] = useState<any>(null);
   const [selectedReceipt, setSelectedReceipt] = useState<any>(null);
+  const [bankModalPayment, setBankModalPayment] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -77,7 +80,7 @@ export default function FarmerPaymentsPage() {
 
     const interval = setInterval(() => {
       loadPayments(false);
-    }, 6000);
+    }, 5000);
 
     return () => {
       clearInterval(interval);
@@ -172,8 +175,13 @@ export default function FarmerPaymentsPage() {
             {payments.map((p) => {
               const isPaid = p.paymentStatus === "PAID";
               const isProcessing = p.paymentStatus === "PROCESSING";
+              const isSubmitted = p.paymentStatus === "BANK_DETAILS_SUBMITTED";
+              const isRequired = p.paymentStatus === "BANK_DETAILS_REQUIRED";
               const isHold = p.paymentStatus === "ON_HOLD";
               const isFailed = p.paymentStatus === "FAILED";
+
+              const payableAmount = p.finalPayableAmount || p.totalAmount || 0;
+              const deductions = p.deductions || 0;
 
               return (
                 <div
@@ -197,9 +205,9 @@ export default function FarmerPaymentsPage() {
                     </div>
 
                     <div className="text-right">
-                      <span className="text-[10px] text-ink-faint uppercase font-bold block">Total Amount</span>
+                      <span className="text-[10px] text-ink-faint uppercase font-bold block">Payable Amount</span>
                       <span className="font-display font-black text-lg text-emerald-800 block">
-                        {formatCurrency(p.totalAmount)}
+                        {formatCurrency(payableAmount)}
                       </span>
                     </div>
                   </div>
@@ -211,10 +219,65 @@ export default function FarmerPaymentsPage() {
                       <span className="font-semibold text-ink truncate block">{p.centreName}</span>
                     </div>
                     <div>
-                      <span className="text-[10px] text-ink-faint block">Applicable MSP Rate</span>
-                      <span className="font-mono font-semibold text-ink">{formatCurrency(p.ratePerUnit)} / Q</span>
+                      <span className="text-[10px] text-ink-faint block">Rate & Deductions</span>
+                      <span className="font-mono font-semibold text-ink">
+                        {formatCurrency(p.ratePerUnit)} / Q
+                        {deductions > 0 && <span className="text-rose-700 font-normal"> (-{formatCurrency(deductions)})</span>}
+                      </span>
                     </div>
                   </div>
+
+                  {/* PHASE 2 & 3: BANK DETAILS REQUIRED ACTION BOX */}
+                  {isRequired && (
+                    <div className="p-3.5 rounded-xl bg-amber-50/90 border border-amber-300 text-xs space-y-2.5 animate-rise-in">
+                      <div className="flex items-center gap-2 font-bold text-amber-950">
+                        <Building2 size={16} className="text-amber-700 shrink-0" />
+                        <span>Procurement Completed — Bank Details Required</span>
+                      </div>
+                      <p className="text-[11px] leading-relaxed text-amber-900">
+                        Your final payable amount of <strong className="font-bold text-ink">{formatCurrency(payableAmount)}</strong> has been confirmed. Please submit your bank account details to receive payment.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setBankModalPayment(p)}
+                        className="btn-primary w-full !py-2 text-xs font-bold inline-flex items-center justify-center gap-2 bg-amber-600 hover:bg-amber-700 shadow-xs"
+                      >
+                        <Building2 size={14} />
+                        <span>Add Bank Details</span>
+                        <ArrowRight size={13} />
+                      </button>
+                    </div>
+                  )}
+
+                  {/* BANK DETAILS SUBMITTED (PENDING) BOX */}
+                  {isSubmitted && (
+                    <div className="p-3 rounded-lg bg-sky-50 border border-sky-200 text-xs space-y-1.5">
+                      <div className="flex items-center gap-1.5 font-bold text-sky-950">
+                        <Clock size={15} className="text-sky-700" />
+                        <span>Payment Pending (Bank Details Submitted)</span>
+                      </div>
+                      <p className="text-[11px] text-sky-900">
+                        Your bank details have been verified and submitted for processing.
+                      </p>
+                      <div className="text-[11px] font-mono text-sky-950 pt-1 border-t border-sky-200/60 flex items-center justify-between">
+                        <span>{p.bankName || "Bank Account"}:</span>
+                        <span className="font-bold">•••• {p.bankAccountLast4 || "XXXX"} ({p.ifscCode || "IFSC"})</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* PROCESSING BOX */}
+                  {isProcessing && (
+                    <div className="p-3 rounded-lg bg-sky-50 border border-sky-300 text-xs space-y-1.5 animate-pulse">
+                      <div className="flex items-center gap-1.5 font-bold text-sky-950">
+                        <Clock size={15} className="text-sky-700" />
+                        <span>Payment Processing</span>
+                      </div>
+                      <p className="text-[11px] text-sky-900">
+                        Your payment is currently being processed by the Mandi Admin for direct bank disbursement.
+                      </p>
+                    </div>
+                  )}
 
                   {/* PAID Details Box */}
                   {isPaid && (
@@ -222,22 +285,22 @@ export default function FarmerPaymentsPage() {
                       <div className="flex items-center justify-between border-b border-emerald-200/80 pb-2">
                         <div className="flex items-center gap-1.5 text-emerald-900 font-bold">
                           <CheckCircle2 size={15} className="text-emerald-700" />
-                          <span>Amount Credited via {p.paymentMethod || "DBT"}</span>
+                          <span>Payment Successful via {p.paymentMethod || "Bank Transfer"}</span>
                         </div>
                         <span className="font-display font-black text-emerald-950 text-sm">
-                          {formatCurrency(p.totalAmount)}
+                          {formatCurrency(payableAmount)}
                         </span>
                       </div>
 
                       <div className="grid grid-cols-2 gap-2 text-[11px] text-emerald-900/80">
                         <div>
                           <span className="text-[10px] text-emerald-700 block">Transaction ID / Ref</span>
-                          <span className="font-mono font-bold text-emerald-950">
-                            {p.transactionId || p.referenceNo || `TXN-${p.token}`}
+                          <span className="font-mono font-bold text-emerald-950 truncate block">
+                            {p.transactionReference || p.transactionId || `TXN-${p.token}`}
                           </span>
                         </div>
                         <div>
-                          <span className="text-[10px] text-emerald-700 block">Disbursed Date</span>
+                          <span className="text-[10px] text-emerald-700 block">Payment Date</span>
                           <span className="font-semibold text-emerald-950">
                             {p.paidAt ? formatDate(p.paidAt) : formatDate(p.createdAt)}
                           </span>
@@ -275,7 +338,7 @@ export default function FarmerPaymentsPage() {
                         <span>Disbursement Failed</span>
                       </div>
                       <p className="text-[11px] leading-tight text-rose-800">
-                        {p.failureReason || "Bank transfer could not be completed. Mandi officers are reviewing your account."}
+                        {p.failureReason || "Bank transfer could not be completed. Please re-check bank details."}
                       </p>
                     </div>
                   )}
@@ -294,12 +357,30 @@ export default function FarmerPaymentsPage() {
                         <span className="font-bold text-emerald-800 block leading-tight">Procurement Completed</span>
                       </div>
 
-                      {/* Step 2: Payment Initiated */}
+                      {/* Step 2: Bank Details Submitted */}
                       <div className="space-y-1">
-                        <div className="w-6 h-6 rounded-full bg-emerald-600 text-white flex items-center justify-center mx-auto text-xs font-bold shadow-xs">
-                          ✓
+                        <div
+                          className={`w-6 h-6 rounded-full flex items-center justify-center mx-auto text-xs font-bold transition-colors ${
+                            isSubmitted || isProcessing || isPaid
+                              ? "bg-emerald-600 text-white shadow-xs"
+                              : isRequired
+                              ? "bg-amber-500 text-white animate-pulse"
+                              : "bg-surface-sunken text-ink-faint border border-line"
+                          }`}
+                        >
+                          {isSubmitted || isProcessing || isPaid ? "✓" : "2"}
                         </div>
-                        <span className="font-bold text-emerald-800 block leading-tight">Payment Initiated</span>
+                        <span
+                          className={`block leading-tight font-semibold ${
+                            isRequired
+                              ? "text-amber-800 font-bold"
+                              : isSubmitted || isProcessing || isPaid
+                              ? "text-emerald-800 font-bold"
+                              : "text-ink-faint"
+                          }`}
+                        >
+                          Bank Details
+                        </span>
                       </div>
 
                       {/* Step 3: Processing */}
@@ -313,7 +394,7 @@ export default function FarmerPaymentsPage() {
                               : "bg-surface-sunken text-ink-faint border border-line"
                           }`}
                         >
-                          {isPaid ? "✓" : isProcessing ? "3" : "3"}
+                          {isPaid ? "✓" : "3"}
                         </div>
                         <span
                           className={`block leading-tight font-semibold ${
@@ -357,6 +438,18 @@ export default function FarmerPaymentsPage() {
         <PaymentReceiptModal
           payment={selectedReceipt}
           onClose={() => setSelectedReceipt(null)}
+        />
+      )}
+
+      {/* Bank Details Modal */}
+      {bankModalPayment && (
+        <FarmerBankDetailsModal
+          payment={bankModalPayment}
+          onClose={() => setBankModalPayment(null)}
+          onSuccess={() => {
+            setBankModalPayment(null);
+            loadPayments(false);
+          }}
         />
       )}
 

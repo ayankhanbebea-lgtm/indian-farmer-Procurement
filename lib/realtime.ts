@@ -21,6 +21,8 @@ export type RealtimeEvent = {
   paymentId?: string;
   paymentStatus?: string;
   status?: string;
+  token?: string;
+  date?: string;
   timestamp: string;
 };
 

@@ -117,7 +117,7 @@ export default function LoginPage() {
         }
         return;
       }
-      setResendCooldown(data.resendAvailableIn || 30);
+      setResendCooldown(data.resendAvailableIn || 10);
       setStep("otp");
       setOtp("");
       // Fetch dev OTP for development testing

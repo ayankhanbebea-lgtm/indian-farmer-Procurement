@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
-import { getDb } from "@/lib/db";
+import { getDb, newId, nowIso } from "@/lib/db";
 import { getFarmerProfileId } from "@/lib/farmer";
 
 export async function GET() {
@@ -16,60 +16,166 @@ export async function GET() {
 
   const db = getDb();
 
+  // Query ALL completed procurements and linked payment records for this farmer
   const query = `
     SELECT
-      p.id,
-      p.booking_id as bookingId,
-      p.farmer_id as farmerId,
-      p.farmer_name as farmerName,
-      p.procurement_centre_id as procurementCentreId,
-      p.crop,
-      p.final_quantity as finalQuantity,
-      p.quantity_unit as quantityUnit,
-      p.rate_per_unit as ratePerUnit,
-      COALESCE(p.total_amount, p.amount, 0) as totalAmount,
-      COALESCE(p.payment_status, p.status, 'PENDING') as paymentStatus,
-      p.payment_method as paymentMethod,
+      b.id as bookingId,
+      b.token as token,
+      b.status as bookingStatus,
+      COALESCE(b.actual_quantity, b.quantity_quintal, 0) as bookingActualQuantity,
+      COALESCE(b.deductions, 0) as bookingDeductions,
+      b.quality_grade as qualityGrade,
+      b.farmer_id as bookingFarmerId,
+      b.centre_id as procurementCentreId,
+      c.name as crop,
+      c.code as cropCode,
+      COALESCE(c.msp_rate, 2275) as cropMsp,
+      ctr.name as centreName,
+      ctr.code as centreCode,
+      s.date as slotDate,
+      s.start_time as startTime,
+      s.end_time as endTime,
+      fp.id as farmerId,
+      u.name as farmerName,
+      fp.farmer_code as farmerCode,
+      p.id as paymentId,
+      p.final_quantity as paymentFinalQuantity,
+      p.rate_per_unit as paymentRatePerUnit,
+      p.deductions as paymentDeductions,
+      p.final_payable_amount as paymentFinalPayableAmount,
+      p.total_amount as paymentTotalAmount,
+      COALESCE(p.payment_status, p.status, 'BANK_DETAILS_REQUIRED') as paymentStatus,
+      p.account_holder_name as accountHolderName,
+      p.bank_name as bankName,
       p.bank_account_last4 as bankAccountLast4,
+      p.ifsc_code as ifscCode,
       p.upi_id as upiId,
-      COALESCE(p.transaction_id, p.reference_no) as transactionId,
+      p.payment_method as paymentMethod,
+      COALESCE(p.transaction_reference, p.transaction_id, p.reference_no) as transactionId,
+      COALESCE(p.transaction_reference, p.transaction_id, p.reference_no) as transactionReference,
       p.failure_reason as failureReason,
       p.hold_reason as holdReason,
+      p.submitted_at as submittedAt,
+      p.processed_at as processedAt,
       p.initiated_at as initiatedAt,
       p.paid_at as paidAt,
       p.created_at as createdAt,
-      p.updated_at as updatedAt,
-      b.token,
-      b.status as bookingStatus,
-      b.quality_grade as qualityGrade,
-      ctr.name as centreName,
-      ctr.code as centreCode,
-      fp.farmer_code as farmerCode,
-      s.date as slotDate,
-      s.start_time as startTime,
-      s.end_time as endTime
-    FROM payments p
-    JOIN bookings b ON p.booking_id = b.id
-    JOIN farmer_profiles fp ON p.farmer_id = fp.id
-    JOIN procurement_centres ctr ON p.procurement_centre_id = ctr.id
+      p.updated_at as updatedAt
+    FROM bookings b
+    JOIN crops c ON b.crop_id = c.id
+    JOIN procurement_centres ctr ON b.centre_id = ctr.id
     JOIN slots s ON b.slot_id = s.id
-    WHERE p.farmer_id = ?
-    ORDER BY p.created_at DESC
+    JOIN farmer_profiles fp ON b.farmer_id = fp.id
+    JOIN users u ON fp.user_id = u.id
+    LEFT JOIN payments p ON p.booking_id = b.id
+    WHERE (b.farmer_id = ? OR fp.user_id = ? OR p.farmer_id = ?)
+      AND (b.status IN ('PROCUREMENT_COMPLETED', 'PAYMENT_PROCESSING', 'PAYMENT_COMPLETED') OR p.id IS NOT NULL)
+    ORDER BY COALESCE(p.created_at, b.updated_at, b.created_at) DESC
   `;
 
-  const payments = db.prepare(query).all(farmerId) as any[];
+  const rows = db.prepare(query).all(farmerId, session.id, farmerId) as any[];
 
+  console.log("[FarmerPayments API]", {
+    loggedInFarmerId: farmerId,
+    userId: session.id,
+    completedProcurementsFound: rows.length,
+  });
+
+  const payments: any[] = [];
   let totalDisbursed = 0;
   let pendingAmount = 0;
   let inProcessingAmount = 0;
 
-  for (const p of payments) {
-    if (p.paymentStatus === "PAID") {
-      totalDisbursed += p.totalAmount;
-    } else if (p.paymentStatus === "PROCESSING") {
-      inProcessingAmount += p.totalAmount;
+  for (const row of rows) {
+    let paymentId = row.paymentId;
+    const finalQuantity = row.paymentFinalQuantity != null ? row.paymentFinalQuantity : (row.bookingActualQuantity || 0);
+    const ratePerUnit = row.paymentRatePerUnit != null ? row.paymentRatePerUnit : row.cropMsp;
+    const deductions = row.paymentDeductions != null ? row.paymentDeductions : (row.bookingDeductions || 0);
+    const finalPayable = row.paymentFinalPayableAmount != null
+      ? row.paymentFinalPayableAmount
+      : (row.paymentTotalAmount != null ? row.paymentTotalAmount : Math.max(0, Math.round(((finalQuantity * ratePerUnit) - deductions) * 100) / 100));
+
+    // If payment record was not yet created for a completed procurement, auto-create it
+    if (!paymentId) {
+      paymentId = newId("pay_");
+      try {
+        db.prepare(`
+          INSERT INTO payments (
+            id, booking_id, token_number, farmer_id, farmer_name, procurement_centre_id,
+            crop, final_quantity, quantity_unit, rate_per_unit, deductions, final_payable_amount,
+            total_amount, amount, payment_status, status, created_at, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Quintal', ?, ?, ?, ?, ?, 'BANK_DETAILS_REQUIRED', 'PENDING', ?, ?)
+        `).run(
+          paymentId,
+          row.bookingId,
+          row.token,
+          farmerId,
+          row.farmerName || "Farmer",
+          row.procurementCentreId,
+          row.crop,
+          finalQuantity,
+          ratePerUnit,
+          deductions,
+          finalPayable,
+          finalPayable,
+          finalPayable,
+          nowIso(),
+          nowIso()
+        );
+      } catch (err) {
+        console.error("[FarmerPayments Auto-Create Error]", err);
+      }
+    }
+
+    const paymentItem = {
+      id: paymentId,
+      bookingId: row.bookingId,
+      farmerId: row.farmerId,
+      farmerName: row.farmerName,
+      procurementCentreId: row.procurementCentreId,
+      crop: row.crop,
+      finalQuantity,
+      quantityUnit: "Quintal",
+      ratePerUnit,
+      deductions,
+      finalPayableAmount: finalPayable,
+      totalAmount: finalPayable,
+      paymentStatus: row.paymentStatus || "BANK_DETAILS_REQUIRED",
+      accountHolderName: row.accountHolderName,
+      bankName: row.bankName,
+      bankAccountLast4: row.bankAccountLast4,
+      ifscCode: row.ifscCode,
+      upiId: row.upiId,
+      paymentMethod: row.paymentMethod,
+      transactionId: row.transactionId,
+      transactionReference: row.transactionReference,
+      failureReason: row.failureReason,
+      holdReason: row.holdReason,
+      submittedAt: row.submittedAt,
+      processedAt: row.processedAt,
+      initiatedAt: row.initiatedAt,
+      paidAt: row.paidAt,
+      createdAt: row.createdAt || row.slotDate,
+      updatedAt: row.updatedAt,
+      token: row.token,
+      bookingStatus: row.bookingStatus,
+      qualityGrade: row.qualityGrade,
+      centreName: row.centreName,
+      centreCode: row.centreCode,
+      farmerCode: row.farmerCode,
+      slotDate: row.slotDate,
+      startTime: row.startTime,
+      endTime: row.endTime,
+    };
+
+    payments.push(paymentItem);
+
+    if (paymentItem.paymentStatus === "PAID") {
+      totalDisbursed += finalPayable;
+    } else if (paymentItem.paymentStatus === "PROCESSING") {
+      inProcessingAmount += finalPayable;
     } else {
-      pendingAmount += p.totalAmount;
+      pendingAmount += finalPayable;
     }
   }
 

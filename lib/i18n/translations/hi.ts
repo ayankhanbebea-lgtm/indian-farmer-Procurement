@@ -35,6 +35,7 @@ const hi: Record<TranslationKeys, string> = {
   goodAfternoon: "शुभ दोपहर",
   goodEvening: "शुभ संध्या",
   tryAgain: "पुनः प्रयास करें",
+  refresh: "रिफ्रेश",
   sync: "सिंक",
 
   // Auth
@@ -140,7 +141,8 @@ const hi: Record<TranslationKeys, string> = {
   waiting: "प्रतीक्षारत",
   inProgress: "प्रगति में",
   completed: "पूर्ण",
-  noQueueToday: "आज कतार में कोई किसान नहीं।",
+  mins: "मिनट",
+  noQueueToday: "आज कतार में कोई किसान नहीं है।",
   activeQueue: "सक्रिय कतार",
   todaysTotal: "आज का कुल",
   waitingQueue: "प्रतीक्षा कतार",
@@ -200,6 +202,8 @@ const hi: Record<TranslationKeys, string> = {
   paymentPending: "भुगतान बकाया",
   paymentProcessing: "भुगतान प्रक्रिया में",
   paymentCompleted: "भुगतान पूर्ण",
+  bankDetailsRequired: "बैंक विवरण आवश्यक",
+  bankDetailsSubmitted: "बैंक विवरण जमा किया गया",
   cancelled: "रद्द",
   noShow: "नहीं आए",
   onHold: "रोका गया",

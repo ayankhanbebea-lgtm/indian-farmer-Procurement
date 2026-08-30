@@ -5,7 +5,7 @@ import DashboardShell from "@/components/DashboardShell";
 import StatusBadge from "@/components/StatusBadge";
 import MetricCard, { MetricRow } from "@/components/MetricCard";
 import { CardSkeleton } from "@/components/Skeleton";
-import { formatCurrency, formatDate } from "@/lib/format";
+import { formatCurrency, formatDate, maskAccountNumber } from "@/lib/format";
 import { getAdminLinks } from "@/lib/nav";
 import { useLanguage } from "@/lib/i18n/context";
 import {
@@ -21,6 +21,11 @@ import {
   ArrowRight,
   ShieldCheck,
   ChevronRight,
+  Eye,
+  Lock,
+  User,
+  X,
+  Phone,
 } from "lucide-react";
 
 export default function AdminPaymentsPage() {
@@ -31,6 +36,8 @@ export default function AdminPaymentsPage() {
     totalDisbursed: 0,
     pendingDisbursement: 0,
     pendingCount: 0,
+    bankDetailsRequiredCount: 0,
+    bankDetailsSubmittedCount: 0,
     processingCount: 0,
     paidCount: 0,
     failedCount: 0,
@@ -48,19 +55,19 @@ export default function AdminPaymentsPage() {
   const [dateFilter, setDateFilter] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
 
-  // Action Modals
-  const [processModal, setProcessModal] = useState<any>(null);
-  const [payModal, setPayModal] = useState<any>(null);
-  const [holdModal, setHoldModal] = useState<any>(null);
-  const [failModal, setFailModal] = useState<any>(null);
+  // Detailed View & Process Modal
+  const [activePayment, setActivePayment] = useState<any | null>(null);
 
-  // Pay Modal Form Fields
-  const [paymentMethod, setPaymentMethod] = useState("DBT");
-  const [transactionId, setTransactionId] = useState("");
-  const [bankLast4, setBankLast4] = useState("");
-  const [upiId, setUpiId] = useState("");
-  const [payDateTime, setPayDateTime] = useState("");
+  // Sub-actions in modal
+  const [showMarkPaidForm, setShowMarkPaidForm] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState("Bank Transfer");
+  const [transactionReference, setTransactionReference] = useState("");
+  const [paidDateTime, setPaidDateTime] = useState("");
+
+  const [showHoldForm, setShowHoldForm] = useState(false);
   const [holdReason, setHoldReason] = useState("");
+
+  const [showFailForm, setShowFailForm] = useState(false);
   const [failReason, setFailReason] = useState("");
 
   const loadData = useCallback(async (isInitial = false) => {
@@ -109,7 +116,7 @@ export default function AdminPaymentsPage() {
 
     const interval = setInterval(() => {
       loadData(false);
-    }, 8000);
+    }, 5000);
 
     return () => {
       clearInterval(interval);
@@ -126,18 +133,20 @@ export default function AdminPaymentsPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
+
       const data = await res.json();
       if (!res.ok) {
-        setError(data.error || "Payment action could not be completed.");
-        return;
+        throw new Error(data.error || "Action could not be completed.");
       }
-      setProcessModal(null);
-      setPayModal(null);
-      setHoldModal(null);
-      setFailModal(null);
-      loadData(false);
-    } catch {
-      setError("Network error while processing payment action.");
+
+      // Close modal forms and reload
+      setShowMarkPaidForm(false);
+      setShowHoldForm(false);
+      setShowFailForm(false);
+      setActivePayment(null);
+      await loadData(false);
+    } catch (err: any) {
+      setError(err.message || "Action failed. Please try again.");
     } finally {
       setBusy(false);
     }
@@ -148,51 +157,41 @@ export default function AdminPaymentsPage() {
   return (
     <DashboardShell role="Admin" name={me?.name || "Admin"} links={links}>
       <div className="space-y-6">
-        {/* Header & Live Indicator */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-white p-4 rounded-xl border border-line shadow-sm">
-          <div className="flex items-center gap-3">
-            <span className="w-10 h-10 rounded-xl bg-brand-50 text-brand-700 flex items-center justify-center shrink-0">
-              <CreditCard size={20} />
-            </span>
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="font-display font-bold text-ink text-base">
-                  {t("paymentsManagement")}
-                </h1>
-                <span className="text-[10px] font-mono font-bold bg-brand-100 text-brand-800 px-1.5 py-0.5 rounded">
-                  MANDI DBT SYSTEM
-                </span>
-              </div>
-              <p className="text-xs text-ink-faint mt-0.5">
-                Calculate, verify, and disburse official procurement payments to registered farmers in real time.
-              </p>
+        {/* Header */}
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <CreditCard className="text-brand-600" size={24} />
+              <h1 className="font-display font-bold text-2xl text-ink">
+                Procurement Payment Management
+              </h1>
             </div>
+            <p className="text-xs text-ink-faint mt-1">
+              Process direct farmer disbursements, review bank account details, and disburse MSP payments in real time.
+            </p>
           </div>
 
           <div className="flex items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              LIVE REALTIME SYNC
-            </span>
             <button
-              onClick={() => loadData(false)}
-              className="btn-ghost !py-1.5 !px-3 text-xs inline-flex items-center gap-1.5 text-ink-soft"
-              title={t("sync")}
+              onClick={() => loadData(true)}
+              className="btn-secondary !py-2 !px-3 text-xs inline-flex items-center gap-1.5 font-semibold"
+              disabled={loading || busy}
             >
-              <RefreshCw size={13} className={busy ? "animate-spin" : ""} /> {t("sync")}
+              <RefreshCw size={13} className={loading ? "animate-spin" : ""} />
+              <span>{t("refresh")}</span>
             </button>
           </div>
         </div>
 
         {/* Error Alert */}
         {error && (
-          <div className="panel border-rose-200 bg-rose-50/80 p-3.5 flex items-center justify-between gap-3 text-rose-800 text-xs animate-rise-in">
-            <div className="flex items-center gap-2">
-              <AlertTriangle size={16} className="shrink-0 text-rose-600" />
-              <span className="font-semibold">{error}</span>
+          <div className="panel border-rose-200 bg-rose-50 p-4 text-rose-900 text-xs flex items-center justify-between animate-rise-in">
+            <div className="flex items-center gap-2 font-bold">
+              <AlertTriangle size={16} className="text-rose-600 shrink-0" />
+              <span>{error}</span>
             </div>
-            <button onClick={() => setError("")} className="text-rose-600 hover:text-rose-800 font-bold">
-              {t("close")}
+            <button onClick={() => setError("")} className="text-rose-700 font-bold hover:text-rose-900">
+              Dismiss
             </button>
           </div>
         )}
@@ -210,14 +209,19 @@ export default function AdminPaymentsPage() {
             tone={stats.pendingCount > 0 ? "warn" : "default"}
           />
           <MetricCard
-            label={t("pending")}
-            value={`${stats.pendingCount} tokens`}
-            tone={stats.pendingCount > 0 ? "warn" : "default"}
+            label="Ready to Process"
+            value={`${stats.bankDetailsSubmittedCount} requests`}
+            tone={stats.bankDetailsSubmittedCount > 0 ? "warn" : "default"}
           />
           <MetricCard
             label={t("processing")}
             value={`${stats.processingCount} in bank`}
             tone={stats.processingCount > 0 ? "warn" : "default"}
+          />
+          <MetricCard
+            label="Awaiting Bank Info"
+            value={`${stats.bankDetailsRequiredCount} farmers`}
+            tone="default"
           />
           <MetricCard
             label={t("onHold")}
@@ -279,10 +283,11 @@ export default function AdminPaymentsPage() {
           {/* Status Tabs */}
           <div className="flex flex-wrap items-center gap-1.5 pt-1 border-t border-line/60">
             {[
-              { id: "ALL", label: "All Statuses", count: stats.totalRecords },
-              { id: "PENDING", label: "Pending", count: stats.pendingCount },
+              { id: "ALL", label: "All Records", count: stats.totalRecords },
+              { id: "BANK_DETAILS_SUBMITTED", label: "Bank Details Submitted", count: stats.bankDetailsSubmittedCount },
               { id: "PROCESSING", label: "Processing", count: stats.processingCount },
               { id: "PAID", label: "Paid", count: stats.paidCount },
+              { id: "BANK_DETAILS_REQUIRED", label: "Bank Details Required", count: stats.bankDetailsRequiredCount },
               { id: "ON_HOLD", label: "On Hold", count: stats.onHoldCount },
               { id: "FAILED", label: "Failed", count: stats.failedCount },
             ].map((tab) => (
@@ -326,202 +331,122 @@ export default function AdminPaymentsPage() {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-xs min-w-[900px]">
+              <table className="w-full text-xs min-w-[950px]">
                 <thead className="bg-surface text-ink-faint border-b border-line sticky top-0">
                   <tr className="text-left font-semibold">
                     <th className="py-3 px-4">Farmer Details</th>
                     <th className="py-3 px-3">Token & Centre</th>
                     <th className="py-3 px-3">Crop & Weighed Qty</th>
-                    <th className="py-3 px-3">Applicable Rate</th>
-                    <th className="py-3 px-3">Total Payable</th>
-                    <th className="py-3 px-3">Status</th>
-                    <th className="py-3 px-3">Payment Ref / Txn ID</th>
-                    <th className="py-3 px-4 text-right">Actions</th>
+                    <th className="py-3 px-3">Rate & Deductions</th>
+                    <th className="py-3 px-3">Payable Amount</th>
+                    <th className="py-3 px-3">Payment Status</th>
+                    <th className="py-3 px-3">Bank Account (Masked)</th>
+                    <th className="py-3 px-4 text-right">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-line/70">
-                  {payments.map((p) => (
-                    <tr key={p.id} className="hover:bg-surface/50 transition-colors">
-                      {/* Farmer */}
-                      <td className="py-3.5 px-4">
-                        <p className="font-bold text-ink text-xs">{p.farmerName}</p>
-                        <p className="text-[10px] text-ink-faint font-mono">+91 {p.farmerPhone}</p>
-                      </td>
+                  {payments.map((p) => {
+                    const payable = p.finalPayableAmount || p.totalAmount || 0;
+                    const deductions = p.deductions || 0;
 
-                      {/* Token & Centre */}
-                      <td className="py-3.5 px-3">
-                        <span className="font-mono font-bold text-ink text-xs block">{p.token}</span>
-                        <span className="text-[10px] text-ink-faint truncate block max-w-[140px]" title={p.centreName}>
-                          {p.centreName}
-                        </span>
-                      </td>
+                    return (
+                      <tr key={p.id} className="hover:bg-surface/50 transition-colors">
+                        {/* Farmer */}
+                        <td className="py-3.5 px-4">
+                          <p className="font-bold text-ink text-xs">{p.farmerName}</p>
+                          <p className="text-[10px] text-ink-faint font-mono">+91 {p.farmerPhone}</p>
+                        </td>
 
-                      {/* Crop & Weighed Qty */}
-                      <td className="py-3.5 px-3">
-                        <span className="font-semibold text-ink block">{p.crop}</span>
-                        <span className="text-[11px] font-mono text-brand-700 font-bold">
-                          {p.finalQuantity} {p.quantityUnit || "Quintal"}
-                        </span>
-                      </td>
-
-                      {/* Rate */}
-                      <td className="py-3.5 px-3 font-mono font-semibold text-ink-soft">
-                        {formatCurrency(p.ratePerUnit)} / Q
-                      </td>
-
-                      {/* Total Payable */}
-                      <td className="py-3.5 px-3">
-                        <span className="font-display font-black text-ink text-sm block">
-                          {formatCurrency(p.totalAmount)}
-                        </span>
-                        <span className="text-[9px] text-ink-faint font-mono">
-                          {formatDate(p.slotDate || p.createdAt)}
-                        </span>
-                      </td>
-
-                      {/* Status */}
-                      <td className="py-3.5 px-3">
-                        <StatusBadge status={p.paymentStatus} />
-                        {p.failureReason && (
-                          <span className="block text-[10px] text-rose-600 mt-1 truncate max-w-[120px]" title={p.failureReason}>
-                            {p.failureReason}
+                        {/* Token & Centre */}
+                        <td className="py-3.5 px-3">
+                          <span className="font-mono font-bold text-ink text-xs block">{p.token}</span>
+                          <span className="text-[10px] text-ink-faint truncate block max-w-[140px]" title={p.centreName}>
+                            {p.centreName}
                           </span>
-                        )}
-                        {p.holdReason && (
-                          <span className="block text-[10px] text-orange-700 mt-1 truncate max-w-[120px]" title={p.holdReason}>
-                            {p.holdReason}
-                          </span>
-                        )}
-                      </td>
+                        </td>
 
-                      {/* Payment Ref */}
-                      <td className="py-3.5 px-3 text-[11px]">
-                        {p.paymentStatus === "PAID" ? (
-                          <div>
-                            <span className="font-mono font-bold text-emerald-800 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200 block text-[10px]">
-                              {p.transactionId || p.referenceNo || "PAID"}
+                        {/* Crop & Weighed Qty */}
+                        <td className="py-3.5 px-3">
+                          <span className="font-semibold text-ink block">{p.crop}</span>
+                          <span className="text-[11px] font-mono text-brand-700 font-bold">
+                            {p.finalQuantity} {p.quantityUnit || "Quintal"}
+                          </span>
+                        </td>
+
+                        {/* Rate & Deductions */}
+                        <td className="py-3.5 px-3">
+                          <span className="font-mono font-semibold text-ink-soft block">
+                            {formatCurrency(p.ratePerUnit)} / Q
+                          </span>
+                          {deductions > 0 && (
+                            <span className="text-[10px] font-mono text-rose-700 block">
+                              -{formatCurrency(deductions)}
                             </span>
-                            <span className="text-[10px] text-ink-faint mt-0.5 block">
-                              {p.paymentMethod || "DBT"} · {p.paidAt ? formatDate(p.paidAt) : "Completed"}
+                          )}
+                        </td>
+
+                        {/* Total Payable */}
+                        <td className="py-3.5 px-3">
+                          <span className="font-display font-black text-ink text-sm block">
+                            {formatCurrency(payable)}
+                          </span>
+                          <span className="text-[9px] text-ink-faint font-mono">
+                            {formatDate(p.slotDate || p.createdAt)}
+                          </span>
+                        </td>
+
+                        {/* Status */}
+                        <td className="py-3.5 px-3">
+                          <StatusBadge status={p.paymentStatus} />
+                          {p.failureReason && (
+                            <span className="block text-[10px] text-rose-600 mt-1 truncate max-w-[120px]" title={p.failureReason}>
+                              {p.failureReason}
                             </span>
-                          </div>
-                        ) : p.paymentStatus === "PROCESSING" ? (
-                          <span className="text-sky-700 font-semibold flex items-center gap-1 text-[11px]">
-                            <Clock size={12} className="animate-spin" /> In Processing
-                          </span>
-                        ) : (
-                          <span className="text-ink-faint">—</span>
-                        )}
-                      </td>
+                          )}
+                          {p.holdReason && (
+                            <span className="block text-[10px] text-orange-700 mt-1 truncate max-w-[120px]" title={p.holdReason}>
+                              {p.holdReason}
+                            </span>
+                          )}
+                        </td>
 
-                      {/* Actions */}
-                      <td className="py-3.5 px-4 text-right whitespace-nowrap space-x-1.5">
-                        {p.paymentStatus === "PENDING" && (
-                          <>
-                            <button
-                              disabled={busy}
-                              onClick={() => {
-                                setProcessModal(p);
-                              }}
-                              className="btn-primary !py-1 !px-2.5 text-xs font-semibold inline-flex items-center gap-1"
-                            >
-                              <span>{t("startProcessing")}</span>
-                              <ArrowRight size={12} />
-                            </button>
-                            <button
-                              disabled={busy}
-                              onClick={() => {
-                                setHoldModal(p);
-                                setHoldReason("");
-                              }}
-                              className="btn-secondary !py-1 !px-2 text-xs text-orange-700 hover:text-orange-800"
-                              title={t("putOnHold")}
-                            >
-                              {t("putOnHold")}
-                            </button>
-                          </>
-                        )}
+                        {/* Masked Bank Account */}
+                        <td className="py-3.5 px-3 text-[11px]">
+                          {p.bankAccountLast4 ? (
+                            <div>
+                              <span className="font-mono font-semibold text-ink block">
+                                {p.bankName ? `${p.bankName} · ` : ""}XXXX XXXX {p.bankAccountLast4}
+                              </span>
+                              {p.ifscCode && (
+                                <span className="text-[10px] font-mono text-ink-faint block">{p.ifscCode}</span>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-ink-faint italic text-[10px]">Awaiting Bank Details</span>
+                          )}
+                        </td>
 
-                        {p.paymentStatus === "PROCESSING" && (
-                          <>
-                            <button
-                              disabled={busy}
-                              onClick={() => {
-                                setPayModal(p);
-                                setPaymentMethod("DBT");
-                                setTransactionId(`DBT-${p.token}-${Date.now().toString().slice(-4)}`);
-                                setBankLast4("");
-                                setUpiId("");
-                                setPayDateTime(new Date().toISOString().slice(0, 16));
-                              }}
-                              className="btn-primary !py-1 !px-2.5 text-xs font-semibold inline-flex items-center gap-1 bg-emerald-700 hover:bg-emerald-800"
-                            >
-                              <CheckCircle2 size={13} />
-                              <span>{t("markPaid")}</span>
-                            </button>
-                            <button
-                              disabled={busy}
-                              onClick={() => {
-                                setFailModal(p);
-                                setFailReason("");
-                              }}
-                              className="btn-secondary !py-1 !px-2 text-xs text-rose-600 hover:text-rose-700"
-                              title={t("markFailed")}
-                            >
-                              {t("markFailed")}
-                            </button>
-                            <button
-                              disabled={busy}
-                              onClick={() => {
-                                setHoldModal(p);
-                                setHoldReason("");
-                              }}
-                              className="btn-secondary !py-1 !px-2 text-xs text-orange-700 hover:text-orange-800"
-                              title={t("putOnHold")}
-                            >
-                              {t("putOnHold")}
-                            </button>
-                          </>
-                        )}
-
-                        {p.paymentStatus === "ON_HOLD" && (
+                        {/* Action: View & Process */}
+                        <td className="py-3.5 px-4 text-right whitespace-nowrap">
                           <button
-                            disabled={busy}
-                            onClick={() =>
-                              executeAction({
-                                paymentId: p.id,
-                                action: "RESUME_PAYMENT",
-                              })
-                            }
-                            className="btn-secondary !py-1 !px-2.5 text-xs font-semibold text-brand-700 hover:text-brand-800 inline-flex items-center gap-1"
+                            onClick={() => {
+                              setActivePayment(p);
+                              setShowMarkPaidForm(false);
+                              setShowHoldForm(false);
+                              setShowFailForm(false);
+                              setPaymentMethod("Bank Transfer");
+                              setTransactionReference(`TXN-${p.token}-${Date.now().toString().slice(-4)}`);
+                              setPaidDateTime(new Date().toISOString().slice(0, 16));
+                            }}
+                            className="btn-primary !py-1.5 !px-3 text-xs font-bold inline-flex items-center gap-1.5 shadow-xs"
                           >
-                            <RefreshCw size={12} /> {t("resumePayment")}
+                            <Eye size={13} />
+                            <span>View & Process</span>
                           </button>
-                        )}
-
-                        {p.paymentStatus === "FAILED" && (
-                          <button
-                            disabled={busy}
-                            onClick={() =>
-                              executeAction({
-                                paymentId: p.id,
-                                action: "RESUME_PAYMENT",
-                              })
-                            }
-                            className="btn-secondary !py-1 !px-2.5 text-xs font-semibold text-rose-700 hover:text-rose-800 inline-flex items-center gap-1"
-                          >
-                            <RefreshCw size={12} /> Retry Payment
-                          </button>
-                        )}
-
-                        {p.paymentStatus === "PAID" && (
-                          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 px-2 py-0.5 bg-emerald-50 rounded border border-emerald-200">
-                            <ShieldCheck size={13} /> Verified Disbursed
-                          </span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
+                        </td>
+                      </tr>
+                    );
+                  })}
 
                   {payments.length === 0 && (
                     <tr>
@@ -541,302 +466,411 @@ export default function AdminPaymentsPage() {
         </div>
       </div>
 
-      {/* START PROCESSING MODAL */}
-      {processModal && (
-        <PaymentModal
-          title={`Start Payment Processing — ${processModal.token}`}
-          onClose={() => setProcessModal(null)}
-        >
-          <div className="space-y-4">
-            <div className="bg-surface-sunken p-3.5 rounded-lg text-xs space-y-1.5 border border-line">
-              <div className="flex justify-between">
-                <span className="text-ink-faint">Farmer:</span>
-                <span className="font-bold text-ink">{processModal.farmerName}</span>
+      {/* SECURE VIEW & PROCESS MODAL */}
+      {activePayment && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-rise-in overflow-y-auto">
+          <div className="bg-white rounded-2xl max-w-xl w-full shadow-2xl border border-line overflow-hidden my-auto">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between px-6 py-4 bg-brand-900 text-white border-b border-brand-800">
+              <div className="flex items-center gap-2">
+                <ShieldCheck size={20} className="text-emerald-400" />
+                <div>
+                  <h3 className="font-display font-bold text-sm">
+                    Payment Request Verification & Processing
+                  </h3>
+                  <p className="text-[11px] text-white/70 font-mono">Token: {activePayment.token}</p>
+                </div>
               </div>
-              <div className="flex justify-between">
-                <span className="text-ink-faint">Crop & Weighed Weight:</span>
-                <span className="font-semibold text-ink">
-                  {processModal.crop} · {processModal.finalQuantity} {processModal.quantityUnit || "Quintal"}
-                </span>
+              <button
+                onClick={() => setActivePayment(null)}
+                className="text-white/80 hover:text-white p-1 rounded hover:bg-white/10"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-6 space-y-4 text-xs text-ink max-h-[80vh] overflow-y-auto">
+              {/* SECTION 1: PROCUREMENT & PAYMENT SUMMARY */}
+              <div className="space-y-2">
+                <h4 className="text-[11px] font-bold uppercase tracking-wider text-ink-faint flex items-center justify-between">
+                  <span>Payment Summary</span>
+                  <StatusBadge status={activePayment.paymentStatus} />
+                </h4>
+                <div className="p-3.5 rounded-xl bg-surface-sunken border border-line grid grid-cols-2 gap-3 text-xs">
+                  <div>
+                    <span className="text-[10px] text-ink-faint block uppercase font-bold">Farmer Name</span>
+                    <span className="font-bold text-ink text-sm block">{activePayment.farmerName}</span>
+                    <span className="text-[10px] text-ink-faint font-mono block">+91 {activePayment.farmerPhone}</span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-ink-faint block uppercase font-bold">Procurement Centre</span>
+                    <span className="font-semibold text-ink text-xs block">{activePayment.centreName}</span>
+                    <span className="text-[10px] text-brand-700 font-mono block">{activePayment.centreCode}</span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-ink-faint block uppercase font-bold">Crop & Quantity</span>
+                    <span className="font-semibold text-ink text-xs block">
+                      {activePayment.crop} · {activePayment.finalQuantity} {activePayment.quantityUnit || "Quintal"}
+                    </span>
+                    <span className="text-[10px] text-ink-faint block">Grade: {activePayment.qualityGrade || "FAQ"}</span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-ink-faint block uppercase font-bold">MSP Rate & Deductions</span>
+                    <span className="font-mono font-semibold text-ink block">{formatCurrency(activePayment.ratePerUnit)} / Q</span>
+                    {activePayment.deductions > 0 && (
+                      <span className="text-[10px] font-mono text-rose-700 block">
+                        Less Deductions: -{formatCurrency(activePayment.deductions)}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-300 flex items-center justify-between">
+                  <span className="font-bold text-emerald-950 uppercase text-xs tracking-wide">
+                    Total Payable Amount to Farmer:
+                  </span>
+                  <span className="font-display font-black text-emerald-900 text-xl">
+                    {formatCurrency(activePayment.finalPayableAmount || activePayment.totalAmount)}
+                  </span>
+                </div>
               </div>
-              <div className="flex justify-between">
-                <span className="text-ink-faint">Calculated Total Amount:</span>
-                <span className="font-display font-black text-brand-700 text-sm">
-                  {formatCurrency(processModal.totalAmount)}
-                </span>
+
+              {/* SECTION 2: FARMER BANK DETAILS (SECURE AUTHORIZED VIEW) */}
+              <div className="space-y-2 pt-2 border-t border-line">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-[11px] font-bold uppercase tracking-wider text-ink-faint flex items-center gap-1.5">
+                    <Lock size={13} className="text-emerald-700" />
+                    <span>Farmer Verified Bank Account Details</span>
+                  </h4>
+                  <span className="text-[10px] text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                    Authorized Admin Access
+                  </span>
+                </div>
+
+                {activePayment.accountNumber ? (
+                  <div className="p-3.5 rounded-xl bg-surface-sunken border border-line space-y-2 text-xs">
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <span className="text-[10px] text-ink-faint block">Account Holder Name:</span>
+                        <span className="font-bold text-ink text-sm block">
+                          {activePayment.accountHolderName || activePayment.farmerName}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-ink-faint block">Bank Name:</span>
+                        <span className="font-semibold text-ink block">{activePayment.bankName || "—"}</span>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 pt-1 border-t border-line/60">
+                      <div>
+                        <span className="text-[10px] text-ink-faint block">Full Bank Account Number:</span>
+                        <span className="font-mono font-bold text-emerald-900 text-sm bg-white px-2 py-1 rounded border border-emerald-300 inline-block">
+                          {activePayment.accountNumber}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-ink-faint block">IFSC Code:</span>
+                        <span className="font-mono font-bold text-ink text-sm bg-white px-2 py-1 rounded border border-line inline-block">
+                          {activePayment.ifscCode || "—"}
+                        </span>
+                      </div>
+                    </div>
+
+                    {activePayment.upiId && (
+                      <div className="pt-1 border-t border-line/60">
+                        <span className="text-[10px] text-ink-faint block">UPI ID:</span>
+                        <span className="font-mono font-semibold text-ink">{activePayment.upiId}</span>
+                      </div>
+                    )}
+
+                    {activePayment.submittedAt && (
+                      <div className="text-[10px] text-ink-faint pt-1">
+                        Submitted by Farmer: {formatDate(activePayment.submittedAt)}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-300 text-amber-900 text-xs">
+                    <p className="font-semibold">Bank details have not been submitted by the farmer yet.</p>
+                    <p className="text-[11px] text-amber-800 mt-0.5">
+                      The farmer has received a notification on their dashboard to enter their verified bank account details.
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* SECTION 3: ADMIN ACTION CONTROLS */}
+              <div className="space-y-3 pt-2 border-t border-line">
+                <h4 className="text-[11px] font-bold uppercase tracking-wider text-ink-faint">
+                  Administrative Disbursement Workflow
+                </h4>
+
+                {/* Sub-form: MARK PAID */}
+                {showMarkPaidForm && (
+                  <div className="p-4 rounded-xl bg-emerald-50/90 border border-emerald-300 space-y-3 animate-rise-in">
+                    <div className="flex items-center justify-between border-b border-emerald-200 pb-2">
+                      <span className="font-bold text-emerald-950 text-xs flex items-center gap-1.5">
+                        <CheckCircle2 size={15} className="text-emerald-700" />
+                        Disburse Payment & Record Transaction
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setShowMarkPaidForm(false)}
+                        className="text-xs text-ink-faint hover:text-ink font-semibold"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="label text-[11px] font-bold">Payment Method *</label>
+                        <select
+                          className="input text-xs font-semibold bg-white"
+                          value={paymentMethod}
+                          onChange={(e) => setPaymentMethod(e.target.value)}
+                        >
+                          <option value="Bank Transfer">Bank Transfer (NEFT / RTGS)</option>
+                          <option value="DBT">Direct Benefit Transfer (DBT)</option>
+                          <option value="PFMS">PFMS Mandi Portal</option>
+                          <option value="UPI">UPI Transfer</option>
+                          <option value="Other">Other Bank Gateway</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="label text-[11px] font-bold">Transaction / UTR Reference ID *</label>
+                        <input
+                          type="text"
+                          required
+                          className="input text-xs font-mono font-bold bg-white"
+                          placeholder="e.g. UTR1234567890"
+                          value={transactionReference}
+                          onChange={(e) => setTransactionReference(e.target.value)}
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="label text-[11px] font-bold">Disbursement Timestamp *</label>
+                      <input
+                        type="datetime-local"
+                        className="input text-xs font-semibold bg-white"
+                        value={paidDateTime}
+                        onChange={(e) => setPaidDateTime(e.target.value)}
+                      />
+                    </div>
+
+                    <button
+                      type="button"
+                      disabled={busy || !transactionReference.trim()}
+                      onClick={() =>
+                        executeAction({
+                          paymentId: activePayment.id,
+                          action: "MARK_PAID",
+                          paymentMethod,
+                          transactionReference: transactionReference.trim(),
+                          transactionId: transactionReference.trim(),
+                          paidAt: paidDateTime ? new Date(paidDateTime).toISOString() : new Date().toISOString(),
+                        })
+                      }
+                      className="btn-primary w-full !py-2.5 text-xs font-bold inline-flex items-center justify-center gap-2 bg-emerald-700 hover:bg-emerald-800 shadow-sm"
+                    >
+                      <CheckCircle2 size={15} />
+                      <span>{busy ? "Confirming..." : "Confirm External Payment & Mark PAID"}</span>
+                    </button>
+                  </div>
+                )}
+
+                {/* Sub-form: PUT ON HOLD */}
+                {showHoldForm && (
+                  <div className="p-3.5 rounded-xl bg-orange-50 border border-orange-300 space-y-2 animate-rise-in">
+                    <span className="font-bold text-orange-950 text-xs block">Put Payment On Hold</span>
+                    <input
+                      type="text"
+                      className="input text-xs bg-white"
+                      placeholder="Specify reason (e.g. IFSC code verification required with bank)"
+                      value={holdReason}
+                      onChange={(e) => setHoldReason(e.target.value)}
+                    />
+                    <div className="flex justify-end gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => setShowHoldForm(false)}
+                        className="btn-ghost !py-1 !px-3 text-xs"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() =>
+                          executeAction({
+                            paymentId: activePayment.id,
+                            action: "PUT_ON_HOLD",
+                            holdReason: holdReason || "Under administrative verification.",
+                          })
+                        }
+                        className="btn-primary !py-1 !px-3 text-xs font-bold bg-orange-600 hover:bg-orange-700"
+                      >
+                        Confirm Hold
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Sub-form: MARK FAILED */}
+                {showFailForm && (
+                  <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-300 space-y-2 animate-rise-in">
+                    <span className="font-bold text-rose-950 text-xs block">Mark Payment Failed</span>
+                    <input
+                      type="text"
+                      className="input text-xs bg-white"
+                      placeholder="Specify failure reason (e.g. Account number rejected by destination bank)"
+                      value={failReason}
+                      onChange={(e) => setFailReason(e.target.value)}
+                    />
+                    <div className="flex justify-end gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => setShowFailForm(false)}
+                        className="btn-ghost !py-1 !px-3 text-xs"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() =>
+                          executeAction({
+                            paymentId: activePayment.id,
+                            action: "MARK_FAILED",
+                            failureReason: failReason || "Bank transfer failed.",
+                          })
+                        }
+                        className="btn-danger !py-1 !px-3 text-xs font-bold"
+                      >
+                        Confirm Failed
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Action Buttons Bar */}
+                {!showMarkPaidForm && !showHoldForm && !showFailForm && (
+                  <div className="flex flex-wrap items-center gap-2 pt-1">
+                    {/* START PROCESSING */}
+                    {(activePayment.paymentStatus === "BANK_DETAILS_SUBMITTED" ||
+                      activePayment.paymentStatus === "PENDING") && (
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() =>
+                          executeAction({
+                            paymentId: activePayment.id,
+                            action: "START_PROCESSING",
+                          })
+                        }
+                        className="btn-primary !py-2 !px-4 text-xs font-bold inline-flex items-center gap-2 shadow-xs"
+                      >
+                        <Clock size={14} />
+                        <span>Start Processing</span>
+                        <ArrowRight size={13} />
+                      </button>
+                    )}
+
+                    {/* MARK PAID TRIGGER */}
+                    {activePayment.paymentStatus === "PROCESSING" && (
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => setShowMarkPaidForm(true)}
+                        className="btn-primary !py-2 !px-4 text-xs font-bold inline-flex items-center gap-2 bg-emerald-700 hover:bg-emerald-800 shadow-xs"
+                      >
+                        <CheckCircle2 size={14} />
+                        <span>Mark as Paid (Disbursed)</span>
+                      </button>
+                    )}
+
+                    {/* PUT ON HOLD */}
+                    {activePayment.paymentStatus !== "PAID" && activePayment.paymentStatus !== "ON_HOLD" && (
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => setShowHoldForm(true)}
+                        className="btn-secondary !py-2 !px-3 text-xs font-semibold text-orange-700 hover:text-orange-800 inline-flex items-center gap-1.5"
+                      >
+                        <PauseCircle size={14} />
+                        <span>Put On Hold</span>
+                      </button>
+                    )}
+
+                    {/* MARK FAILED */}
+                    {activePayment.paymentStatus === "PROCESSING" && (
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => setShowFailForm(true)}
+                        className="btn-secondary !py-2 !px-3 text-xs font-semibold text-rose-600 hover:text-rose-700 inline-flex items-center gap-1.5"
+                      >
+                        <XCircle size={14} />
+                        <span>Mark Failed</span>
+                      </button>
+                    )}
+
+                    {/* RESUME */}
+                    {(activePayment.paymentStatus === "ON_HOLD" || activePayment.paymentStatus === "FAILED") && (
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() =>
+                          executeAction({
+                            paymentId: activePayment.id,
+                            action: "RESUME_PAYMENT",
+                          })
+                        }
+                        className="btn-secondary !py-2 !px-4 text-xs font-bold text-brand-700 hover:text-brand-800 inline-flex items-center gap-1.5"
+                      >
+                        <RefreshCw size={14} />
+                        <span>Resume Payment Processing</span>
+                      </button>
+                    )}
+
+                    {/* ALREADY PAID */}
+                    {activePayment.paymentStatus === "PAID" && (
+                      <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-950 text-xs w-full space-y-1">
+                        <div className="flex items-center gap-1.5 font-bold">
+                          <CheckCircle2 size={15} className="text-emerald-700" />
+                          <span>Disbursement Completed & Verified</span>
+                        </div>
+                        <p className="text-[11px] text-emerald-900 font-mono">
+                          Method: {activePayment.paymentMethod || "Bank Transfer"} · Txn Ref: {activePayment.transactionReference || activePayment.transactionId}
+                        </p>
+                        <p className="text-[10px] text-emerald-800">
+                          Disbursed At: {activePayment.paidAt ? formatDate(activePayment.paidAt) : formatDate(activePayment.updatedAt)}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
 
-            <p className="text-xs text-ink-soft leading-relaxed">
-              Moving this record to <strong>PROCESSING</strong> initiates the bank transfer disbursement pipeline. The farmer will be notified in real time on their portal.
-            </p>
-
-            <div className="flex gap-2.5 pt-2">
+            {/* Modal Footer */}
+            <div className="px-6 py-3 bg-surface border-t border-line flex items-center justify-end">
               <button
                 type="button"
-                onClick={() => setProcessModal(null)}
-                className="btn-ghost flex-1 text-xs !py-2.5"
+                onClick={() => setActivePayment(null)}
+                className="btn-ghost !py-1.5 !px-4 text-xs font-semibold"
               >
-                {t("cancel")}
-              </button>
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() =>
-                  executeAction({
-                    paymentId: processModal.id,
-                    action: "START_PROCESSING",
-                  })
-                }
-                className="btn-primary flex-1 text-xs !py-2.5 font-bold"
-              >
-                Confirm & Start Processing
+                Close
               </button>
             </div>
           </div>
-        </PaymentModal>
-      )}
-
-      {/* MARK PAID MODAL (REQUIRES TRANSACTION ID & PAYMENT METHOD) */}
-      {payModal && (
-        <PaymentModal
-          title={`Record Payment Disbursement — ${payModal.token}`}
-          onClose={() => setPayModal(null)}
-        >
-          <div className="space-y-4">
-            <div className="bg-emerald-50 border border-emerald-300 p-3.5 rounded-lg text-xs space-y-1.5">
-              <div className="flex justify-between">
-                <span className="text-emerald-800">Farmer:</span>
-                <span className="font-bold text-emerald-950">{payModal.farmerName}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-emerald-800">Crop & Final Weight:</span>
-                <span className="font-semibold text-emerald-950">
-                  {payModal.crop} · {payModal.finalQuantity} Q @ {formatCurrency(payModal.ratePerUnit)}/Q
-                </span>
-              </div>
-              <div className="flex justify-between border-t border-emerald-200 pt-1 mt-1">
-                <span className="text-emerald-900 font-bold text-xs">Total Amount Paid:</span>
-                <span className="font-display font-black text-emerald-900 text-base">
-                  {formatCurrency(payModal.totalAmount)}
-                </span>
-              </div>
-            </div>
-
-            <div>
-              <label className="label text-xs font-bold">{t("paymentMethod")} *</label>
-              <select
-                className="input text-xs font-semibold"
-                value={paymentMethod}
-                onChange={(e) => setPaymentMethod(e.target.value)}
-              >
-                <option value="DBT">DBT (Direct Benefit Transfer)</option>
-                <option value="NEFT">NEFT (National Electronic Fund Transfer)</option>
-                <option value="RTGS">RTGS (Real Time Gross Settlement)</option>
-                <option value="PFMS">PFMS (Public Financial Management System)</option>
-                <option value="UPI">UPI (Unified Payments Interface)</option>
-                <option value="Bank Transfer">Bank Transfer (Direct Mandi Account)</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="label text-xs font-bold">
-                {t("transactionId")} / Reference No. *
-              </label>
-              <input
-                type="text"
-                className="input font-mono text-xs font-bold"
-                placeholder="e.g. DBT2026083078901 / UTR99281726"
-                value={transactionId}
-                onChange={(e) => setTransactionId(e.target.value)}
-                required
-                autoFocus
-              />
-              <p className="text-[10px] text-ink-faint mt-1">
-                Mandatory reference number from the banking gateway or PFMS portal.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="label text-xs font-bold">Bank Acc Last 4 (Optional)</label>
-                <input
-                  type="text"
-                  maxLength={4}
-                  className="input font-mono text-xs"
-                  placeholder="e.g. 4821"
-                  value={bankLast4}
-                  onChange={(e) => setBankLast4(e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="label text-xs font-bold">UPI ID (Optional)</label>
-                <input
-                  type="text"
-                  className="input text-xs font-mono"
-                  placeholder="e.g. farmer@upi"
-                  value={upiId}
-                  onChange={(e) => setUpiId(e.target.value)}
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="label text-xs font-bold">Payment Date & Time</label>
-              <input
-                type="datetime-local"
-                className="input text-xs font-semibold"
-                value={payDateTime}
-                onChange={(e) => setPayDateTime(e.target.value)}
-              />
-            </div>
-
-            <div className="flex gap-2.5 pt-2">
-              <button
-                type="button"
-                onClick={() => setPayModal(null)}
-                className="btn-ghost flex-1 text-xs !py-2.5"
-              >
-                {t("cancel")}
-              </button>
-              <button
-                type="button"
-                disabled={busy || !transactionId.trim()}
-                onClick={() =>
-                  executeAction({
-                    paymentId: payModal.id,
-                    action: "MARK_PAID",
-                    paymentMethod,
-                    transactionId: transactionId.trim(),
-                    bankAccountLast4: bankLast4.trim() || undefined,
-                    upiId: upiId.trim() || undefined,
-                    paidAt: payDateTime ? new Date(payDateTime).toISOString() : undefined,
-                  })
-                }
-                className="btn-primary flex-1 text-xs !py-2.5 font-bold bg-emerald-700 hover:bg-emerald-800 shadow-sm"
-              >
-                Confirm Disbursement
-              </button>
-            </div>
-          </div>
-        </PaymentModal>
-      )}
-
-      {/* HOLD MODAL */}
-      {holdModal && (
-        <PaymentModal
-          title={`Put Payment On Hold — ${holdModal.token}`}
-          onClose={() => setHoldModal(null)}
-        >
-          <div className="space-y-4">
-            <p className="text-xs text-ink-soft">
-              Specify the reason why payment disbursement for <strong>{holdModal.farmerName}</strong> is being placed on hold.
-            </p>
-            <div>
-              <label className="label text-xs font-bold">Hold Reason *</label>
-              <textarea
-                className="input text-xs min-h-[80px]"
-                placeholder="e.g. Bank account IFSC code mismatch, awaiting farmer verification..."
-                value={holdReason}
-                onChange={(e) => setHoldReason(e.target.value)}
-                required
-              />
-            </div>
-            <div className="flex gap-2.5 pt-2">
-              <button type="button" onClick={() => setHoldModal(null)} className="btn-ghost flex-1 text-xs !py-2.5">
-                {t("cancel")}
-              </button>
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() =>
-                  executeAction({
-                    paymentId: holdModal.id,
-                    action: "PUT_ON_HOLD",
-                    holdReason: holdReason.trim() || "Under administrative verification.",
-                  })
-                }
-                className="btn-secondary flex-1 text-xs !py-2.5 font-bold text-orange-700 hover:text-orange-800"
-              >
-                Confirm Put On Hold
-              </button>
-            </div>
-          </div>
-        </PaymentModal>
-      )}
-
-      {/* FAIL MODAL */}
-      {failModal && (
-        <PaymentModal
-          title={`Mark Payment Failed — ${failModal.token}`}
-          onClose={() => setFailModal(null)}
-        >
-          <div className="space-y-4">
-            <p className="text-xs text-ink-soft">
-              Record failure details for <strong>{failModal.farmerName}</strong>. The farmer will be notified.
-            </p>
-            <div>
-              <label className="label text-xs font-bold">Failure Reason *</label>
-              <textarea
-                className="input text-xs min-h-[80px]"
-                placeholder="e.g. Bank server rejected transfer due to invalid account status..."
-                value={failReason}
-                onChange={(e) => setFailReason(e.target.value)}
-                required
-              />
-            </div>
-            <div className="flex gap-2.5 pt-2">
-              <button type="button" onClick={() => setFailModal(null)} className="btn-ghost flex-1 text-xs !py-2.5">
-                {t("cancel")}
-              </button>
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() =>
-                  executeAction({
-                    paymentId: failModal.id,
-                    action: "MARK_FAILED",
-                    failureReason: failReason.trim() || "Bank transfer failed.",
-                  })
-                }
-                className="btn-danger flex-1 text-xs !py-2.5 font-bold"
-              >
-                Confirm Mark Failed
-              </button>
-            </div>
-          </div>
-        </PaymentModal>
+        </div>
       )}
     </DashboardShell>
-  );
-}
-
-function PaymentModal({
-  title,
-  onClose,
-  children,
-}: {
-  title: string;
-  onClose: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="fixed inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center px-4 z-50 animate-rise-in">
-      <div className="bg-white rounded-xl p-5 w-full max-w-md shadow-raised space-y-4 border border-line">
-        <div className="flex items-center justify-between border-b border-line pb-3">
-          <h3 className="font-bold text-sm text-ink flex items-center gap-1.5">
-            <CreditCard size={16} className="text-brand-700" />
-            {title}
-          </h3>
-          <button
-            onClick={onClose}
-            className="text-ink-faint hover:text-ink text-xs font-bold px-1.5 py-0.5 rounded"
-          >
-            ✕
-          </button>
-        </div>
-        {children}
-      </div>
-    </div>
   );
 }

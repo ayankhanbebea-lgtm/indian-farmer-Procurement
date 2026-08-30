@@ -43,8 +43,8 @@ export async function POST(req: NextRequest) {
   const currentStatus = payment.paymentStatus;
 
   if (action === "START_PROCESSING") {
-    if (currentStatus !== "PENDING" && currentStatus !== "ON_HOLD") {
-      return NextResponse.json({ error: `Cannot start processing a payment that is ${currentStatus}.` }, { status: 409 });
+    if (currentStatus !== "BANK_DETAILS_SUBMITTED" && currentStatus !== "PENDING" && currentStatus !== "ON_HOLD") {
+      return NextResponse.json({ error: `Cannot start processing a payment with status '${currentStatus}'.` }, { status: 409 });
     }
 
     try {
@@ -52,9 +52,14 @@ export async function POST(req: NextRequest) {
 
       db.prepare(`
         UPDATE payments
-        SET payment_status = 'PROCESSING', status = 'PROCESSING', initiated_at = COALESCE(initiated_at, ?), updated_at = ?
+        SET
+          payment_status = 'PROCESSING',
+          status = 'PROCESSING',
+          processed_at = COALESCE(processed_at, ?),
+          initiated_at = COALESCE(initiated_at, ?),
+          updated_at = ?
         WHERE id = ?
-      `).run(nowIso(), nowIso(), paymentId);
+      `).run(nowIso(), nowIso(), nowIso(), paymentId);
 
       db.prepare(`
         UPDATE bookings
@@ -96,8 +101,9 @@ export async function POST(req: NextRequest) {
   }
 
   if (action === "MARK_PAID") {
-    if (!transactionId || transactionId.trim().length === 0) {
-      return NextResponse.json({ error: "Transaction / Reference ID is required to mark payment as Paid." }, { status: 400 });
+    const txnRef = (parsed.data.transactionReference || transactionId || "").trim();
+    if (!txnRef) {
+      return NextResponse.json({ error: "Transaction / Reference ID is mandatory to mark payment as Paid." }, { status: 400 });
     }
     if (!paymentMethod) {
       return NextResponse.json({ error: "Payment method is required." }, { status: 400 });
@@ -114,17 +120,19 @@ export async function POST(req: NextRequest) {
           payment_status = 'PAID',
           status = 'PAID',
           payment_method = ?,
+          transaction_reference = ?,
           transaction_id = ?,
           reference_no = ?,
-          bank_account_last4 = ?,
-          upi_id = ?,
+          bank_account_last4 = COALESCE(?, bank_account_last4),
+          upi_id = COALESCE(?, upi_id),
           paid_at = ?,
           updated_at = ?
         WHERE id = ?
       `).run(
         paymentMethod,
-        transactionId.trim(),
-        transactionId.trim(),
+        txnRef,
+        txnRef,
+        txnRef,
         bankAccountLast4 ? bankAccountLast4.trim() : null,
         upiId ? upiId.trim() : null,
         payTimestamp,
@@ -147,7 +155,7 @@ export async function POST(req: NextRequest) {
     sendNotification(
       payment.farmerUserId,
       "PAYMENT_COMPLETED",
-      `Payment of ${formatCurrency(payment.totalAmount)} for token ${payment.token} has been successfully transferred via ${paymentMethod} (Txn: ${transactionId.trim()}).`,
+      `Payment of ${formatCurrency(payment.totalAmount)} for token ${payment.token} has been successfully transferred via ${paymentMethod} (Txn: ${txnRef}).`,
       payment.bookingId
     );
     recordAudit(session.id, "ADMIN_MARK_PAID", "payment", paymentId);

@@ -27,9 +27,11 @@ export default function StaffDashboard() {
   const [me, setMe] = useState<any>(null);
   const [error, setError] = useState("");
   const [selectedDate, setSelectedDate] = useState<string>("");
+  const [selectedCentreId, setSelectedCentreId] = useState<string>("");
   const [weighModal, setWeighModal] = useState<any>(null);
   const [actualQty, setActualQty] = useState("");
   const [ratePerUnit, setRatePerUnit] = useState("");
+  const [deductions, setDeductions] = useState("0");
   const [qualityGrade, setQualityGrade] = useState("GRADE_A");
   const [remarks, setRemarks] = useState("");
   const [noShowConfirm, setNoShowConfirm] = useState<any>(null);
@@ -43,7 +45,7 @@ export default function StaffDashboard() {
   const eventSourceRef = useRef<EventSource | null>(null);
 
   const load = useCallback(
-    async (isInitial = false, dateOverride?: string) => {
+    async (isInitial = false, dateOverride?: string, centreOverride?: string) => {
       if (isInitial) setLoading(true);
       const queryStart = Date.now();
       try {
@@ -57,7 +59,12 @@ export default function StaffDashboard() {
         }
 
         const activeDate = dateOverride !== undefined ? dateOverride : selectedDate;
-        const targetUrl = activeDate ? `/api/staff/queue?date=${encodeURIComponent(activeDate)}` : "/api/staff/queue";
+        const activeCentre = centreOverride !== undefined ? centreOverride : selectedCentreId;
+        const params = new URLSearchParams();
+        if (activeDate) params.set("date", activeDate);
+        if (activeCentre) params.set("centreId", activeCentre);
+
+        const targetUrl = `/api/staff/queue${params.toString() ? `?${params.toString()}` : ""}`;
         const res = await fetch(targetUrl);
         const d = await res.json();
         const queryEnd = Date.now();
@@ -70,24 +77,18 @@ export default function StaffDashboard() {
           return;
         }
 
-        console.log({
-          staffCentreId: d.centre?.id,
-          staffCentreCode: d.centre?.code,
-          selectedDate: activeDate || d.date,
-          queryStart,
-          queryEnd,
-          bookingsReceived: d.rows?.length,
-        });
-
         setData(d);
         if (!selectedDate && d.date && d.date !== "all") {
           setSelectedDate(d.date);
+        }
+        if (!selectedCentreId && d.centre?.id) {
+          setSelectedCentreId(d.centre.id);
         }
         // If today is empty on initial load but upcoming dates have bookings, auto-switch
         if (isInitial && !selectedDate && d.rows?.length === 0 && d.upcomingSummary?.length > 0) {
           const firstActiveDate = d.upcomingSummary[0].date;
           setSelectedDate(firstActiveDate);
-          load(false, firstActiveDate);
+          load(false, firstActiveDate, activeCentre);
           return;
         }
         setError("");
@@ -98,7 +99,7 @@ export default function StaffDashboard() {
         if (isInitial) setLoading(false);
       }
     },
-    [selectedDate, setLang]
+    [selectedDate, selectedCentreId, setLang]
   );
 
   useEffect(() => {
@@ -149,7 +150,11 @@ export default function StaffDashboard() {
       const res = await fetch("/api/staff/actions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "CALL_NEXT", date: selectedDate || data?.todayIST }),
+        body: JSON.stringify({
+          action: "CALL_NEXT",
+          date: selectedDate || data?.todayIST,
+          centreId: selectedCentreId || data?.centre?.id,
+        }),
       });
       const d = await res.json();
       if (!res.ok) {
@@ -171,7 +176,12 @@ export default function StaffDashboard() {
       const res = await fetch("/api/staff/actions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ bookingId, action, ...extra }),
+        body: JSON.stringify({
+          bookingId,
+          action,
+          centreId: selectedCentreId || data?.centre?.id,
+          ...extra,
+        }),
       });
       const d = await res.json();
       if (!res.ok) {
@@ -274,7 +284,24 @@ export default function StaffDashboard() {
             </span>
             <div>
               <div className="flex items-center gap-2">
-                <p className="font-display font-bold text-ink text-sm">{centre.name}</p>
+                {data?.allCentres && data.allCentres.length > 1 ? (
+                  <select
+                    value={selectedCentreId || centre.id}
+                    onChange={(e) => {
+                      setSelectedCentreId(e.target.value);
+                      load(false, selectedDate, e.target.value);
+                    }}
+                    className="font-display font-bold text-ink text-sm bg-transparent border-b border-brand-600 focus:outline-none cursor-pointer pr-2"
+                  >
+                    {data.allCentres.map((c: any) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name} ({c.code})
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <p className="font-display font-bold text-ink text-sm">{centre.name}</p>
+                )}
                 <span className="text-[10px] font-mono font-bold bg-brand-100 text-brand-800 px-1.5 py-0.5 rounded">
                   {centre.code}
                 </span>
@@ -753,11 +780,11 @@ export default function StaffDashboard() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-3 gap-2">
               <div>
-                <label className="label text-xs font-bold">{t("scaleWeight")} (Quintal) *</label>
+                <label className="label text-xs font-bold">{t("scaleWeight")} (Q) *</label>
                 <input
-                  className="input tnum text-base font-bold"
+                  className="input tnum text-sm font-bold"
                   type="number"
                   step="0.01"
                   min="0.1"
@@ -770,13 +797,25 @@ export default function StaffDashboard() {
               <div>
                 <label className="label text-xs font-bold">{t("mspRate")} (₹/Q) *</label>
                 <input
-                  className="input tnum text-base font-bold"
+                  className="input tnum text-sm font-bold"
                   type="number"
                   step="1"
                   min="100"
                   value={ratePerUnit}
                   onChange={(e) => setRatePerUnit(e.target.value)}
                   placeholder="e.g. 2275"
+                />
+              </div>
+              <div>
+                <label className="label text-xs font-bold">Deductions (₹)</label>
+                <input
+                  className="input tnum text-sm font-bold"
+                  type="number"
+                  step="1"
+                  min="0"
+                  value={deductions}
+                  onChange={(e) => setDeductions(e.target.value)}
+                  placeholder="0"
                 />
               </div>
             </div>
@@ -824,14 +863,20 @@ export default function StaffDashboard() {
                   <span className="font-semibold text-ink text-xs">{formatCurrency(Number(ratePerUnit) || 0)} / Q</span>
                 </div>
                 <div>
-                  <span className="text-[10px] text-emerald-800 font-bold block">{t("calculatedPayable")}</span>
-                  <span className="font-display font-black text-emerald-900 text-sm">
-                    {formatCurrency((Number(actualQty) || 0) * (Number(ratePerUnit) || 0))}
-                  </span>
+                  <span className="text-[10px] text-ink-faint block">Deductions</span>
+                  <span className="font-semibold text-rose-700 text-xs font-mono">{formatCurrency(Number(deductions) || 0)}</span>
                 </div>
               </div>
+              <div className="pt-2 border-t border-emerald-200 flex items-center justify-between">
+                <span className="text-xs font-bold text-emerald-950 uppercase tracking-wide">
+                  Total Payable to Farmer:
+                </span>
+                <span className="font-display font-black text-emerald-900 text-base">
+                  {formatCurrency(Math.max(0, (Number(actualQty) || 0) * (Number(ratePerUnit) || 0) - (Number(deductions) || 0)))}
+                </span>
+              </div>
               <p className="text-[10px] text-emerald-800 leading-tight pt-1">
-                ✓ Once confirmed, procurement is marked COMPLETED and an official payment record starts in PENDING status for Admin processing.
+                ✓ Once confirmed, procurement is marked COMPLETED and the farmer is notified to enter their bank account details on their dashboard.
               </p>
             </div>
 
@@ -842,6 +887,7 @@ export default function StaffDashboard() {
                 doAction(weighModal.id, "COMPLETE_PROCUREMENT", {
                   actualQuantity: Number(actualQty),
                   ratePerUnit: Number(ratePerUnit),
+                  deductions: Number(deductions) || 0,
                   qualityGrade,
                   remarks: remarks || undefined,
                 })
