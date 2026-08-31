@@ -10,7 +10,6 @@ import { formatDate, formatDateShort } from "@/lib/format";
 import {
   ChevronLeft,
   Wheat,
-  Sparkles,
   CheckCircle2,
   Clock3,
   MapPin,
@@ -437,10 +436,7 @@ export default function BookSlotPage() {
             {/* Recommended Centre Card */}
             {recommended && (
               <div className="panel p-4 border-grain/40 bg-grain-soft/30 space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <p className="inline-flex items-center gap-1.5 text-xs font-bold text-grain uppercase tracking-wide">
-                    <Sparkles size={13} /> Recommended for you
-                  </p>
+                <div className="flex items-center justify-end">
                   <span className="text-xs font-semibold text-ink-faint flex items-center gap-1">
                     <MapPin size={12} /> {recommended.distanceKm} km away
                   </span>

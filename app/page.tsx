@@ -2,6 +2,7 @@ import Link from "next/link";
 import LandingHeader from "@/components/LandingHeader";
 import LandingHero from "@/components/LandingHero";
 import { Mark } from "@/components/Logo";
+import Footer from "@/components/Footer";
 import { CalendarCheck, ListOrdered, Wallet, ClipboardCheck, MapPin, LayoutGrid, Landmark } from "lucide-react";
 
 export default function LandingPage() {
@@ -64,20 +65,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      <footer className="bg-navy text-white/60 mt-auto">
-        <div className="max-w-5xl mx-auto px-4 py-10 text-sm">
-          <Mark size={22} className="text-white/80 mb-2" />
-          <p className="font-semibold text-white">Smart Procurement</p>
-          <p className="mt-1">Digital queue and procurement management for farmers and procurement centres.</p>
-          <div className="mt-5 flex gap-4 text-xs text-white/50">
-            <span>About</span>
-            <span>Help</span>
-            <span>Privacy</span>
-            <span>Terms</span>
-            <span>Contact</span>
-          </div>
-        </div>
-      </footer>
+      <Footer />
     </main>
   );
 }

@@ -21,7 +21,7 @@ export function Logo({ dark = false, className = "" }: { dark?: boolean; classNa
   return (
     <span className={`inline-flex items-center gap-2 font-display font-extrabold tracking-tight ${className}`}>
       <Mark size={26} className={dark ? "text-white" : "text-brand-600"} />
-      <span className={dark ? "text-white" : "text-ink"}>Smart Procurement</span>
+      <span className={dark ? "text-white" : "text-ink"}>KRISHIDHENU</span>
     </span>
   );
 }

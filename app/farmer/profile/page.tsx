@@ -63,7 +63,7 @@ export default function ProfilePage() {
         { icon: MapPin, label: t("district"), value: profile.district || "Jaipur" },
         { icon: MapPin, label: t("state"), value: profile.state || "Rajasthan" },
         { icon: IdCard, label: t("farmerCode"), value: profile.farmerCode || "Not assigned" },
-        { icon: Globe, label: t("preferredLanguage"), value: profile.language === "hi" ? "हिन्दी" : "English" },
+        { icon: Globe, label: t("preferredLanguage"), value: profile.language === "hi" ? "हिंदी" : "English" },
       ]
     : [];
 

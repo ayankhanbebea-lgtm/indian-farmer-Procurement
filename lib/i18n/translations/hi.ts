@@ -2,7 +2,7 @@ import { TranslationKeys } from "./en";
 
 const hi: Record<TranslationKeys, string> = {
   // Common
-  appName: "स्मार्ट खरीद",
+  appName: "KRISHIDHENU",
   tagline: "कम प्रतीक्षा। बेहतर योजना। पारदर्शी खरीद।",
   login: "लॉगिन",
   logout: "लॉगआउट",
@@ -39,7 +39,7 @@ const hi: Record<TranslationKeys, string> = {
   sync: "सिंक",
 
   // Auth
-  welcomeTitle: "स्मार्ट खरीद में आपका स्वागत है",
+  welcomeTitle: "KRISHIDHENU में आपका स्वागत है",
   enterMobile: "जारी रखने के लिए अपना मोबाइल नंबर दर्ज करें।",
   mobileLabel: "मोबाइल नंबर",
   sendOtp: "OTP भेजें",
@@ -239,7 +239,7 @@ const hi: Record<TranslationKeys, string> = {
   filterByCentre: "केंद्र अनुसार फ़िल्टर",
   filterByStatus: "स्थिति अनुसार फ़िल्टर",
   paymentReceipt: "उपज खरीद भुगतान रसीद",
-  mandiReceiptHeader: "राजस्थान सरकार - स्मार्ट मंडी खरीद प्रणाली",
+  mandiReceiptHeader: "राजस्थान सरकार - KRISHIDHENU खरीद प्रणाली",
   receiptSubHeader: "कृषि एवं किसान कल्याण विभाग",
   receiptDisclaimer: "यह कंप्यूटर जनित आधिकारिक खरीद रसीद है।",
   authorizedBy: "अधिकृत मंडी अधिकारी",

@@ -75,7 +75,7 @@ export default function PaymentReceiptModal({ payment, onClose }: PaymentReceipt
               <span>Department of Agriculture & Farmer Welfare</span>
             </div>
             <h1 className="font-display font-black text-lg text-ink tracking-tight uppercase">
-              Smart Procurement Mandi Receipt
+              KRISHIDHENU Mandi Receipt
             </h1>
             <p className="text-[11px] text-ink-faint">
               Government of Rajasthan · Direct Benefit Transfer (DBT) Portal

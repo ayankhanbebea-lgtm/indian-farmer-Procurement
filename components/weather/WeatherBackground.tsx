@@ -114,9 +114,9 @@ export default function WeatherBackground({ weather, className = "" }: WeatherBa
           twinklePhase: 0,
         });
       }
-    } else if (condition === "CLEAR" && isNight) {
-      // Night Starfield
-      const starCount = 65;
+    } else if (isNight && (condition === "CLEAR" || condition === "PARTLY_CLOUDY")) {
+      // Night Starfield (Full starfield for CLEAR, gentle for PARTLY_CLOUDY)
+      const starCount = condition === "CLEAR" ? 65 : 35;
       for (let i = 0; i < starCount; i++) {
         particles.push({
           x: Math.random() * width,
@@ -130,9 +130,9 @@ export default function WeatherBackground({ weather, className = "" }: WeatherBa
           twinklePhase: Math.random() * Math.PI * 2,
         });
       }
-    } else if (condition === "CLEAR" && !isNight) {
-      // Sunny Day - subtle golden ambient sunbeam particles
-      const sunbeamCount = 30;
+    } else if (!isNight && (condition === "CLEAR" || condition === "PARTLY_CLOUDY")) {
+      // Sunny / Partly Cloudy Day - subtle golden ambient sunbeam particles
+      const sunbeamCount = condition === "CLEAR" ? 32 : 18;
       for (let i = 0; i < sunbeamCount; i++) {
         particles.push({
           x: Math.random() * width,
@@ -174,7 +174,7 @@ export default function WeatherBackground({ weather, className = "" }: WeatherBa
           ctx.lineTo(p.x + windTilt * p.length, p.y + p.length);
           ctx.stroke();
         }
-      } else if (condition === "CLEAR" && isNight) {
+      } else if (isNight && (condition === "CLEAR" || condition === "PARTLY_CLOUDY")) {
         // Starfield twinkling with gentle sine modulation
         for (const p of particles) {
           p.twinklePhase += p.twinkleSpeed;
@@ -185,7 +185,7 @@ export default function WeatherBackground({ weather, className = "" }: WeatherBa
           ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
           ctx.fill();
         }
-      } else if (condition === "CLEAR" && !isNight) {
+      } else if (!isNight && (condition === "CLEAR" || condition === "PARTLY_CLOUDY")) {
         // Floating warm sunbeams
         for (const p of particles) {
           p.y -= p.speed * 30 * delta;
@@ -255,16 +255,16 @@ export default function WeatherBackground({ weather, className = "" }: WeatherBa
       {/* 2. Celestial Radiance (Sun / Moon Glow) */}
       {condition === "CLEAR" && isDay && (
         <div
-          className="absolute -top-24 -right-24 w-[420px] h-[420px] rounded-full opacity-35 filter blur-3xl pointer-events-none"
+          className="absolute -top-24 -right-24 w-[440px] h-[440px] rounded-full filter blur-3xl pointer-events-none animate-sun-glow"
           style={{
-            background: "radial-gradient(circle, rgba(251, 191, 36, 0.5) 0%, rgba(245, 158, 11, 0.22) 50%, transparent 80%)",
+            background: "radial-gradient(circle, rgba(251, 191, 36, 0.55) 0%, rgba(245, 158, 11, 0.25) 50%, transparent 80%)",
           }}
         />
       )}
 
       {condition === "CLEAR" && !isDay && (
         <div
-          className="absolute -top-20 -right-20 w-[360px] h-[360px] rounded-full opacity-25 filter blur-3xl pointer-events-none"
+          className="absolute -top-20 -right-20 w-[360px] h-[360px] rounded-full filter blur-3xl pointer-events-none animate-sun-glow"
           style={{
             background: "radial-gradient(circle, rgba(216, 235, 255, 0.45) 0%, rgba(147, 197, 253, 0.18) 50%, transparent 80%)",
           }}
@@ -273,9 +273,18 @@ export default function WeatherBackground({ weather, className = "" }: WeatherBa
 
       {condition === "PARTLY_CLOUDY" && isDay && (
         <div
-          className="absolute -top-20 -right-16 w-[360px] h-[360px] rounded-full opacity-25 filter blur-3xl pointer-events-none"
+          className="absolute -top-20 -right-16 w-[380px] h-[380px] rounded-full filter blur-3xl pointer-events-none animate-sun-glow"
           style={{
-            background: "radial-gradient(circle, rgba(252, 211, 77, 0.4) 0%, rgba(245, 158, 11, 0.12) 60%, transparent 80%)",
+            background: "radial-gradient(circle, rgba(252, 211, 77, 0.45) 0%, rgba(245, 158, 11, 0.18) 60%, transparent 80%)",
+          }}
+        />
+      )}
+
+      {condition === "PARTLY_CLOUDY" && !isDay && (
+        <div
+          className="absolute -top-20 -right-20 w-[360px] h-[360px] rounded-full filter blur-3xl pointer-events-none animate-sun-glow"
+          style={{
+            background: "radial-gradient(circle, rgba(216, 235, 255, 0.35) 0%, rgba(147, 197, 253, 0.12) 50%, transparent 80%)",
           }}
         />
       )}
@@ -287,10 +296,10 @@ export default function WeatherBackground({ weather, className = "" }: WeatherBa
           style={{ opacity: Math.max(0.18, Math.min(0.45, (cloudCover || 50) / 180)) }}
         >
           <div
-            className="absolute top-2 -left-1/4 w-[160%] h-52 bg-gradient-to-r from-transparent via-white/10 to-transparent blur-3xl animate-[cloudDrift_50s_linear_infinite]"
+            className="absolute top-2 -left-1/4 w-[160%] h-52 bg-gradient-to-r from-transparent via-white/10 to-transparent blur-3xl animate-cloud-drift"
           />
           <div
-            className="absolute top-16 -left-1/3 w-[170%] h-44 bg-gradient-to-r from-transparent via-slate-300/15 to-transparent blur-3xl animate-[cloudDrift_70s_linear_infinite_reverse]"
+            className="absolute top-16 -left-1/3 w-[170%] h-44 bg-gradient-to-r from-transparent via-slate-300/15 to-transparent blur-3xl animate-cloud-drift-reverse"
           />
         </div>
       )}

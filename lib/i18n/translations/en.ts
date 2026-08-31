@@ -1,6 +1,6 @@
 const en = {
   // Common
-  appName: "Smart Procurement",
+  appName: "KRISHIDHENU",
   tagline: "Less waiting. Better planning. Transparent procurement.",
   login: "Login",
   logout: "Logout",
@@ -37,7 +37,7 @@ const en = {
   sync: "Sync",
 
   // Auth
-  welcomeTitle: "Welcome to Smart Procurement",
+  welcomeTitle: "Welcome to KRISHIDHENU",
   enterMobile: "Enter your mobile number to continue.",
   mobileLabel: "Mobile Number",
   sendOtp: "Send OTP",
@@ -237,7 +237,7 @@ const en = {
   filterByCentre: "Filter by Centre",
   filterByStatus: "Filter by Status",
   paymentReceipt: "Procurement Payment Receipt",
-  mandiReceiptHeader: "Government of Rajasthan - Smart Mandi Procurement",
+  mandiReceiptHeader: "Government of Rajasthan - KRISHIDHENU Procurement Portal",
   receiptSubHeader: "Department of Agriculture & Farmer Welfare",
   receiptDisclaimer: "This is a computer-generated official procurement receipt.",
   authorizedBy: "Authorized Mandi Officer",

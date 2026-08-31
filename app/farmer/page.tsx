@@ -188,10 +188,7 @@ export default function FarmerHomePage() {
 
                 <div className="relative z-10 space-y-3">
                   <div className="flex items-center justify-between">
-                    <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/15 text-white text-[11px] font-bold tracking-wide backdrop-blur-xs">
-                      <Sparkles size={13} className="text-amber-300" />
-                      <span>Smart Mandi Portal</span>
-                    </div>
+                    <div></div>
 
                     <span className="text-[11px] font-mono font-semibold text-white/80 bg-black/20 px-2 py-0.5 rounded">
                       Active: {activeCount} / {maxLimit}

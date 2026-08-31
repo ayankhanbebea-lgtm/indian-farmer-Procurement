@@ -3,7 +3,7 @@ import "./globals.css";
 import { LanguageProvider } from "@/lib/i18n/context";
 
 export const metadata: Metadata = {
-  title: "Smart Procurement — Less waiting. Better planning. Transparent procurement.",
+  title: "KRISHIDHENU — Less waiting. Better planning. Transparent procurement.",
   description: "Book procurement slots, track your queue, and stay informed about procurement and payment status.",
 };
 

@@ -1,5 +1,5 @@
 /**
- * SMS Provider Abstraction for Smart Procurement
+ * SMS Provider Abstraction for KRISHIDHENU
  * Supports real SMS gateways (MSG91, Twilio, Exotel) and isolated local development mode.
  */
 
@@ -149,7 +149,7 @@ export async function sendSmsOtp({ phone, otp, templateId }: SendSmsOptions): Pr
       const body = new URLSearchParams({
         To: formattedPhone,
         From: fromNumber,
-        Body: `Your Smart Procurement verification OTP is: ${otp}. Valid for 5 minutes. Do not share this code with anyone.`,
+        Body: `Your KRISHIDHENU verification OTP is: ${otp}. Valid for 5 minutes. Do not share this code with anyone.`,
       });
 
       const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`, {
@@ -198,7 +198,7 @@ export async function sendSmsOtp({ phone, otp, templateId }: SendSmsOptions): Pr
       const body = new URLSearchParams({
         From: senderId,
         To: raw10Digit,
-        Body: `Your Smart Procurement OTP is ${otp}. Valid for 5 minutes.`,
+        Body: `Your KRISHIDHENU OTP is ${otp}. Valid for 5 minutes.`,
       });
 
       const res = await fetch(`https://${subdomain}/v1/Accounts/${sid}/Sms/send.json`, {

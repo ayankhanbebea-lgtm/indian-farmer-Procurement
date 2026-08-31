@@ -87,10 +87,8 @@ export default function DashboardShell({
       <aside className="hidden md:flex md:flex-col md:w-60 md:shrink-0 bg-navy text-white">
         <div className="px-5 py-5 flex items-center gap-2 border-b border-white/10">
           <Mark size={24} className="text-white" />
-          <span className="font-display font-bold leading-tight">
-            Smart
-            <br />
-            Procurement
+          <span className="font-display font-bold leading-tight text-base tracking-tight">
+            KRISHIDHENU
           </span>
         </div>
         <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
@@ -128,7 +126,7 @@ export default function DashboardShell({
           <div className="flex items-center justify-between px-4 py-3.5">
             <div className="flex items-center gap-2">
               <Mark size={20} className="text-white" />
-              <span className="font-display font-bold text-sm">Smart Procurement</span>
+              <span className="font-display font-bold text-sm">KRISHIDHENU</span>
             </div>
             <div className="flex items-center gap-3">
               <button

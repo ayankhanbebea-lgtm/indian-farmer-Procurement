@@ -71,7 +71,7 @@ export async function POST(req: NextRequest) {
         // Add welcome notification
         db.prepare(
           `INSERT INTO notifications (id, user_id, booking_id, type, message, read, created_at)
-           VALUES (?, ?, NULL, 'WELCOME', 'Welcome to Smart Procurement. You can now book your procurement slots.', 0, ?)`
+           VALUES (?, ?, NULL, 'WELCOME', 'Welcome to KRISHIDHENU. You can now book your procurement slots.', 0, ?)`
         ).run(newId("ntf_"), userId, nowIso());
 
         db.exec("COMMIT");

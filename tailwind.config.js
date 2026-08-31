@@ -61,10 +61,22 @@ module.exports = {
           from: { opacity: 0, transform: "translateY(6px)" },
           to: { opacity: 1, transform: "translateY(0)" },
         },
+        cloudDrift: {
+          "0%": { transform: "translateX(-8%)" },
+          "50%": { transform: "translateX(8%)" },
+          "100%": { transform: "translateX(-8%)" },
+        },
+        sunGlow: {
+          "0%, 100%": { transform: "scale(1)", opacity: "0.35" },
+          "50%": { transform: "scale(1.08)", opacity: "0.48" },
+        },
       },
       animation: {
         "pulse-dot": "pulseDot 1.6s ease-in-out infinite",
         "rise-in": "riseIn 0.28s ease-out",
+        "cloud-drift": "cloudDrift 45s linear infinite",
+        "cloud-drift-reverse": "cloudDrift 65s linear infinite reverse",
+        "sun-glow": "sunGlow 8s ease-in-out infinite",
       },
     },
   },

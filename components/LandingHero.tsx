@@ -64,7 +64,7 @@ export default function LandingHero() {
         </div>
 
         <h1 className="font-display text-4xl md:text-5xl font-extrabold tracking-tight drop-shadow-sm">
-          Smart Procurement
+          KRISHIDHENU
         </h1>
         <p className="mt-3 text-lg text-white/80 font-medium">
           Less waiting. Better planning. Transparent procurement.

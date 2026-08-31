@@ -26,15 +26,18 @@ async function main() {
 
   // ---------- Crops ----------
   const crops = [
-    { name: "Wheat", code: "WHT" },
-    { name: "Paddy / Rice", code: "RIC" },
-    { name: "Mustard", code: "MUS" },
-    { name: "Bajra", code: "BAJ" },
-    { name: "Maize", code: "MAZ" },
-    { name: "Gram", code: "GRM" },
+    { name: "Wheat", code: "WHT", msp_rate: 2275 },
+    { name: "Paddy / Rice", code: "RIC", msp_rate: 2300 },
+    { name: "Mustard", code: "MUS", msp_rate: 5650 },
+    { name: "Bajra", code: "BAJ", msp_rate: 2500 },
+    { name: "Maize", code: "MAZ", msp_rate: 2090 },
+    { name: "Gram", code: "GRM", msp_rate: 5440 },
+    { name: "Groundnut", code: "GND", msp_rate: 6783 },
+    { name: "Kharif Pulses", code: "PLS", msp_rate: 7550 },
+    { name: "Barley", code: "BAR", msp_rate: 1850 },
   ];
   for (const c of crops) {
-    db.prepare(`INSERT INTO crops (id, name, code) VALUES (?, ?, ?)`).run(newId("crop_"), c.name, c.code);
+    db.prepare(`INSERT INTO crops (id, name, code, msp_rate) VALUES (?, ?, ?, ?)`).run(newId("crop_"), c.name, c.code, c.msp_rate);
   }
 
   // ---------- Centres ----------

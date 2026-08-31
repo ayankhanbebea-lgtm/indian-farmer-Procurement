@@ -34,15 +34,32 @@ export function runMigrations(db: DatabaseSync) {
     db.exec(`ALTER TABLE crops ADD COLUMN msp_rate REAL NOT NULL DEFAULT 2275`);
   } catch {}
 
-  // Update default MSP rates for standard crops
-  try {
-    db.exec(`UPDATE crops SET msp_rate = 2275 WHERE code = 'WHT'`);
-    db.exec(`UPDATE crops SET msp_rate = 2300 WHERE code = 'RIC'`);
-    db.exec(`UPDATE crops SET msp_rate = 5650 WHERE code = 'MUS'`);
-    db.exec(`UPDATE crops SET msp_rate = 2500 WHERE code = 'BAJ'`);
-    db.exec(`UPDATE crops SET msp_rate = 2090 WHERE code = 'MAZ'`);
-    db.exec(`UPDATE crops SET msp_rate = 5440 WHERE code = 'GRM'`);
-  } catch {}
+  // Ensure all standard crops exist with updated MSP rates
+  const standardCrops = [
+    { name: "Wheat", code: "WHT", msp_rate: 2275 },
+    { name: "Paddy / Rice", code: "RIC", msp_rate: 2300 },
+    { name: "Mustard", code: "MUS", msp_rate: 5650 },
+    { name: "Bajra", code: "BAJ", msp_rate: 2500 },
+    { name: "Maize", code: "MAZ", msp_rate: 2090 },
+    { name: "Gram", code: "GRM", msp_rate: 5440 },
+    { name: "Groundnut", code: "GND", msp_rate: 6783 },
+    { name: "Kharif Pulses", code: "PLS", msp_rate: 7550 },
+    { name: "Barley", code: "BAR", msp_rate: 1850 },
+  ];
+
+  for (const c of standardCrops) {
+    try {
+      const existing = db.prepare(`SELECT id FROM crops WHERE code = ?`).get(c.code) as { id: string } | undefined;
+      if (!existing) {
+        const rand = Math.random().toString(36).slice(2, 10);
+        const time = Date.now().toString(36);
+        const cropId = `crop_${time}${rand}`;
+        db.prepare(`INSERT INTO crops (id, name, code, msp_rate) VALUES (?, ?, ?, ?)`).run(cropId, c.name, c.code, c.msp_rate);
+      } else {
+        db.prepare(`UPDATE crops SET name = ?, msp_rate = ? WHERE code = ?`).run(c.name, c.msp_rate, c.code);
+      }
+    } catch {}
+  }
 
   // Add `deductions` column to bookings if missing
   try {

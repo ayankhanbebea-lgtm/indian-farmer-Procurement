@@ -33,7 +33,7 @@ export default function WeatherIndicator({ weather, loading = false, className =
 
   if (!weather) return null;
 
-  const { temperature, condition, conditionLabel, location, isDay, humidity, windSpeed } = weather;
+  const { temperature, condition, conditionLabel, isDay, humidity, windSpeed } = weather;
 
   const renderIcon = () => {
     switch (condition) {
@@ -65,7 +65,7 @@ export default function WeatherIndicator({ weather, loading = false, className =
   return (
     <div
       className={`inline-flex items-center gap-2.5 px-3.5 py-1.5 rounded-full bg-white/[0.08] hover:bg-white/[0.12] backdrop-blur-md border border-white/15 text-white shadow-sm transition-all text-xs select-none ${className}`}
-      title={`Live Weather at ${location}: ${conditionLabel}, ${temperature}°C, ${humidity}% Humidity, ${windSpeed} km/h Wind`}
+      title={`Live Weather: ${conditionLabel}, ${temperature}°C, ${humidity}% Humidity, ${windSpeed} km/h Wind`}
     >
       <div className="flex items-center gap-1.5">
         {renderIcon()}
@@ -74,14 +74,8 @@ export default function WeatherIndicator({ weather, loading = false, className =
 
       <span className="text-white/30 font-thin">·</span>
 
-      <span className="text-white/90 font-medium truncate max-w-[130px] sm:max-w-[200px]">
+      <span className="text-white/90 font-medium">
         {conditionLabel}
-      </span>
-
-      <span className="text-white/30 font-thin hidden sm:inline">·</span>
-
-      <span className="text-white/70 text-[11px] hidden sm:inline truncate max-w-[110px]">
-        {location}
       </span>
 
       <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-400 pl-1 border-l border-white/15">

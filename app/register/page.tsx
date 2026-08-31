@@ -7,7 +7,7 @@ export default function RegisterPage() {
   const router = useRouter();
 
   useEffect(() => {
-    // Smart Procurement uses passwordless mobile OTP authentication.
+    // KRISHIDHENU uses passwordless mobile OTP authentication.
     // Redirect to the streamlined login & registration flow.
     router.replace("/login");
   }, [router]);
@@ -15,7 +15,7 @@ export default function RegisterPage() {
   return (
     <main className="min-h-screen flex items-center justify-center px-4 bg-surface">
       <div className="text-center text-ink-faint text-sm">
-        Redirecting to Smart Procurement login...
+        Redirecting to KRISHIDHENU login...
       </div>
     </main>
   );

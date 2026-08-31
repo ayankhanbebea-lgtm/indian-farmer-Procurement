@@ -145,7 +145,7 @@ export async function getLiveWeather(
     const res = await fetch(url, {
       next: { revalidate: 600 },
       headers: {
-        "User-Agent": "SmartProcurement-AgriApp/1.0",
+        "User-Agent": "KRISHIDHENU-AgriApp/1.0",
       },
     });
 
