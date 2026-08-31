@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import LandingHeader from "@/components/LandingHeader";
 import Footer from "@/components/Footer";
-import { ChevronLeft, Building2, Award, Users, CheckCircle2 } from "lucide-react";
+import { ChevronLeft, Building2, Users, CheckCircle2 } from "lucide-react";
 
 export const metadata: Metadata = {
   title: "About KRISHIDHENU — Digital Procurement Platform",
@@ -28,10 +28,6 @@ export default function AboutPage() {
 
         {/* Header Title Section */}
         <div className="mb-8">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-brand-50 border border-brand-100 text-brand-700 text-xs font-semibold mb-3">
-            <Award size={14} className="text-brand-600" />
-            <span>Smart India Hackathon 2026</span>
-          </div>
           <h1 className="font-display text-3xl sm:text-4xl font-bold text-ink tracking-tight">
             About KRISHIDHENU
           </h1>
