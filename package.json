@@ -10,6 +10,9 @@
     "seed": "tsx prisma/seed.ts",
     "db:push": "prisma db push"
   },
+  "engines": {
+    "node": ">=22.5.0"
+  },
   "dependencies": {
     "@hookform/resolvers": "3.9.0",
     "bcryptjs": "2.4.3",

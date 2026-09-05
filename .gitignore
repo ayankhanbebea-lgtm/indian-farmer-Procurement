@@ -1,5 +1,6 @@
 node_modules/
 .next/
-prisma/dev.db
+prisma/dev.db*
 .env
+.env*.local
 *.log
