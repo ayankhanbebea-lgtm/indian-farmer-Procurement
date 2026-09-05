@@ -221,7 +221,7 @@ export default function FarmerHomePage() {
                         className="flex-1 btn-primary !py-3 text-sm font-bold inline-flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white shadow-md border border-emerald-400/30 transition-all transform active:scale-[0.99]"
                       >
                         <Plus size={18} strokeWidth={2.5} />
-                        <span>+ Book New Slot</span>
+                        <span>Book New Slot</span>
                       </Link>
                     )}
 
