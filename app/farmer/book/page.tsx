@@ -116,6 +116,8 @@ export default function BookSlotPage() {
         const data = await optRes.json();
         setValidDates(data.validDates || []);
         setCrops(data.crops || []);
+        setCentres(data.centres || []);
+        setRecommended(data.recommended || null);
         if (!date && data.today) {
           setDate(data.today);
         }
@@ -168,6 +170,12 @@ export default function BookSlotPage() {
       loadCentres(date);
     }
   }, [date]);
+
+  useEffect(() => {
+    if (step === 3 && date && centres.length === 0) {
+      loadCentres(date);
+    }
+  }, [step, date, centres.length]);
 
   useEffect(() => {
     if (date && centreId) {
@@ -535,6 +543,18 @@ export default function BookSlotPage() {
                   </button>
                 );
               })}
+              {sortedCentres.length === 0 && (
+                <div className="panel p-6 text-center text-ink-faint text-sm space-y-3">
+                  <p>No procurement centres are currently available for this date.</p>
+                  <button
+                    type="button"
+                    onClick={() => loadCentres(date)}
+                    className="btn-secondary text-xs !py-1.5 !px-3 mx-auto"
+                  >
+                    Reload Centres
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         )}

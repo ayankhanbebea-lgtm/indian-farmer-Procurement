@@ -1,4 +1,4 @@
-import { getDb, newId, nowIso } from "./db";
+import { getDb, newId, nowIso, ensureBaselineData } from "./db";
 import { getTodayIST, normalizeDateToYMD } from "./format";
 
 // Standard daily slots configured for each procurement centre
@@ -200,13 +200,25 @@ export function rankCentres(rawDate?: string): (CentreOption & { score: number; 
   const db = getDb();
   ensureSlotsForDate(date);
 
-  const centres = db.prepare(`SELECT id, name, code, district, distance_km FROM procurement_centres ORDER BY name`).all() as {
+  let centres = db.prepare(`SELECT id, name, code, district, distance_km FROM procurement_centres WHERE active = 1 ORDER BY code ASC`).all() as {
     id: string;
     name: string;
     code: string;
     district: string;
     distance_km: number | null;
   }[];
+
+  if (centres.length === 0) {
+    ensureBaselineData(db);
+    ensureSlotsForDate(date);
+    centres = db.prepare(`SELECT id, name, code, district, distance_km FROM procurement_centres WHERE active = 1 ORDER BY code ASC`).all() as {
+      id: string;
+      name: string;
+      code: string;
+      district: string;
+      distance_km: number | null;
+    }[];
+  }
 
   const defaultDistances: Record<string, number> = {
     JPR01: 12,
