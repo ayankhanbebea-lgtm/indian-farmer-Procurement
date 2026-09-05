@@ -38,6 +38,8 @@ export async function sendSmsOtp({ phone, otp, templateId }: SendSmsOptions): Pr
   const formattedPhone = phone.startsWith("+91") ? phone : `+91${phone.replace(/^0+/, "")}`;
   const raw10Digit = phone.replace(/^\+91/, "").replace(/^0+/, "");
 
+  console.log(`[SMS DISPATCH] Target: +91-XXXXXX${raw10Digit.slice(-4)}, Provider: ${provider}, DemoMode: ${isDemoMode}`);
+
   // GUARANTEED DEMO / DEV SHORT-CIRCUIT:
   // ONLY if demo mode is explicitly enabled or provider is dev/mock:
   if (isDemoMode && (provider === "dev" || provider === "mock")) {
