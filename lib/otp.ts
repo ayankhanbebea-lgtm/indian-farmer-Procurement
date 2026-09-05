@@ -50,6 +50,7 @@ export type SendOtpResult = {
   ok: boolean;
   message?: string;
   error?: string;
+  demoOtp?: string;
   cooldownSeconds?: number;
   resendAvailableIn?: number;
 };
@@ -126,6 +127,7 @@ export async function sendOtpToMobile(rawPhone: string): Promise<SendOtpResult> 
   return {
     ok: true,
     message: "OTP sent successfully to your mobile number.",
+    demoOtp: OTP_DEMO_MODE ? otpCode : undefined,
     resendAvailableIn: RESEND_COOLDOWN_SECONDS,
   };
 }
@@ -191,9 +193,16 @@ export async function verifySubmittedOtp(rawPhone: string, submittedOtp: string)
     return { ok: false, error: "Too many failed attempts. This OTP has been invalidated. Please request a new OTP." };
   }
 
-  // Verify hash or Twilio Verify check
+  // 1. Verify cryptographic hash
   let isValid = verifyOtpHash(otp, phone, otpRecord.otp_hash);
-  if (!isValid && process.env.TWILIO_VERIFY_SERVICE_SID) {
+
+  // 2. In DEMO mode, also accept universal test OTPs "123456" and "000000"
+  if (!isValid && OTP_DEMO_MODE && (otp === "123456" || otp === "000000")) {
+    isValid = true;
+  }
+
+  // 3. Only invoke external Twilio check if explicitly requested, NOT in demo mode, and provider is twilio
+  if (!isValid && !OTP_DEMO_MODE && process.env.SMS_PROVIDER === "twilio" && process.env.TWILIO_VERIFY_SERVICE_SID) {
     isValid = await checkTwilioVerification(phone, otp);
   }
   if (!isValid) {

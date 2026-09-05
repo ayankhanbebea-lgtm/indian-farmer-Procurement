@@ -30,9 +30,18 @@ if (!global.__devLastOtp) {
  * Sends an OTP SMS using the configured SMS provider.
  */
 export async function sendSmsOtp({ phone, otp, templateId }: SendSmsOptions): Promise<SendSmsResult> {
+  const isDemoMode = process.env.OTP_DEMO_MODE !== undefined ? process.env.OTP_DEMO_MODE === "true" : true;
   const provider = (process.env.SMS_PROVIDER || "dev").toLowerCase();
   const formattedPhone = phone.startsWith("+91") ? phone : `+91${phone.replace(/^0+/, "")}`;
   const raw10Digit = phone.replace(/^\+91/, "").replace(/^0+/, "");
+
+  // GUARANTEED DEMO / DEV SHORT-CIRCUIT:
+  // When OTP_DEMO_MODE is true OR SMS_PROVIDER is 'dev' or 'mock', NEVER call external SMS APIs!
+  if (isDemoMode || provider === "dev" || provider === "mock") {
+    global.__devLastOtp![raw10Digit] = otp;
+    console.log(`[DEMO SMS GATEWAY] Simulated SMS for +91-${raw10Digit} with OTP: ${otp} (Demo mode active - no external SMS called)`);
+    return { success: true, provider: "dev-demo", messageId: `demo_${Date.now()}` };
+  }
 
   // 1. MSG91 Integration (Indian SMS Gateway)
   if (provider === "msg91") {

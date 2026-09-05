@@ -112,8 +112,11 @@ export default function LoginPage() {
       setResendCooldown(data.resendAvailableIn || 10);
       setStep("otp");
       setOtp("");
-      // Fetch dev OTP for development testing
-      await fetchDevOtp(cleanPhone);
+      if (data.demoOtp) {
+        setDevOtp(data.demoOtp);
+      } else {
+        await fetchDevOtp(cleanPhone);
+      }
     } catch {
       setError("Unable to connect to authentication server. Please try again.");
     } finally {
@@ -348,8 +351,8 @@ export default function LoginPage() {
               </p>
             </div>
 
-            {/* Dev mode OTP banner */}
-            {isDev && devOtp && (
+            {/* Dev / Demo mode OTP banner */}
+            {devOtp && (
               <div className="flex items-center justify-between gap-2 px-3 py-2.5 rounded-lg bg-amber-50 border border-amber-200">
                 <div className="flex items-center gap-2">
                   <Terminal size={14} className="text-amber-600 shrink-0" />
