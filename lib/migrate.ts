@@ -156,4 +156,75 @@ export function runMigrations(db: DatabaseSync) {
     db.exec(`CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token)`);
     db.exec(`CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id)`);
   } catch { /* ignore */ }
+
+  // Ensure the 5 primary accounts use the updated phone numbers:
+  // Farmer: 9829124370
+  // Admin: 9258879190
+  // Staff Centre 01 (Sitapura): 9509082087 (Suresh)
+  // Staff Centre 02 (Sanganer): 7870844405 (Anita)
+  // Staff Centre 03 (Chaksu): 7015962317 (Mohit)
+  const phoneMappings = [
+    { oldPhone: "9000000001", newPhone: "9258879190", role: "ADMIN", name: "Administrator" },
+    { oldPhone: "9100000001", newPhone: "9509082087", role: "STAFF", name: "Suresh Sharma", centreCode: "JPR01" },
+    { oldPhone: "9100000002", newPhone: "7870844405", role: "STAFF", name: "Anita Verma", centreCode: "JPR02" },
+    { oldPhone: "9100000003", newPhone: "7015962317", role: "STAFF", name: "Mohit Yadav", centreCode: "JPR03" },
+    { oldPhone: "9200000001", newPhone: "9829124370", role: "FARMER", name: "Ramesh Kumar" },
+  ];
+
+  for (const m of phoneMappings) {
+    try {
+      const oldUser = db.prepare("SELECT id FROM users WHERE phone = ?").get(m.oldPhone) as any;
+      const newUser = db.prepare("SELECT id FROM users WHERE phone = ?").get(m.newPhone) as any;
+      if (oldUser && !newUser) {
+        db.prepare("UPDATE users SET phone = ?, name = ?, role = ? WHERE phone = ?").run(m.newPhone, m.name, m.role, m.oldPhone);
+      } else if (oldUser && newUser) {
+        // Old user exists and new user was already created separately (e.g. from an ad-hoc signup)
+        // Migrate any relations from oldUser to newUser if needed, ensure newUser has correct role & name
+        db.prepare("UPDATE users SET role = ?, name = ? WHERE id = ?").run(m.role, m.name, newUser.id);
+        // Link centre if staff
+        if (m.role === "STAFF" && m.centreCode) {
+          const centre = db.prepare("SELECT id FROM procurement_centres WHERE code = ?").get(m.centreCode) as any;
+          if (centre) {
+            const existingLink = db.prepare("SELECT id FROM centre_staff WHERE user_id = ?").get(newUser.id) as any;
+            if (!existingLink) {
+              const csId = `cst_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+              db.prepare("INSERT INTO centre_staff (id, user_id, centre_id) VALUES (?, ?, ?)").run(csId, newUser.id, centre.id);
+            } else {
+              db.prepare("UPDATE centre_staff SET centre_id = ? WHERE user_id = ?").run(centre.id, newUser.id);
+            }
+          }
+        }
+        // Remove duplicate oldUser placeholder if its phone is the old dummy number
+        db.prepare("DELETE FROM users WHERE id = ?").run(oldUser.id);
+      } else if (!oldUser && newUser) {
+        db.prepare("UPDATE users SET role = ?, name = ? WHERE id = ?").run(m.role, m.name, newUser.id);
+        if (m.role === "STAFF" && m.centreCode) {
+          const centre = db.prepare("SELECT id FROM procurement_centres WHERE code = ?").get(m.centreCode) as any;
+          if (centre) {
+            const existingLink = db.prepare("SELECT id FROM centre_staff WHERE user_id = ?").get(newUser.id) as any;
+            if (!existingLink) {
+              const csId = `cst_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+              db.prepare("INSERT INTO centre_staff (id, user_id, centre_id) VALUES (?, ?, ?)").run(csId, newUser.id, centre.id);
+            }
+          }
+        }
+      } else if (!oldUser && !newUser) {
+        const uid = `usr_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+        const now = new Date().toISOString();
+        db.prepare("INSERT INTO users (id, phone, role, name, language, created_at, updated_at, active) VALUES (?, ?, ?, ?, 'en', ?, ?, 1)")
+          .run(uid, m.newPhone, m.role, m.name, now, now);
+        if (m.role === "FARMER") {
+          const fpId = `frm_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+          db.prepare("INSERT OR IGNORE INTO farmer_profiles (id, user_id, address, district, state, farmer_code, language, created_at, updated_at) VALUES (?, ?, 'Village Rd, Jaipur', 'Jaipur', 'Rajasthan', 'FP-1000', 'en', ?, ?)")
+            .run(fpId, uid, now, now);
+        } else if (m.role === "STAFF" && m.centreCode) {
+          const centre = db.prepare("SELECT id FROM procurement_centres WHERE code = ?").get(m.centreCode) as any;
+          if (centre) {
+            const csId = `cst_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+            db.prepare("INSERT OR IGNORE INTO centre_staff (id, user_id, centre_id) VALUES (?, ?, ?)").run(csId, uid, centre.id);
+          }
+        }
+      }
+    } catch {}
+  }
 }

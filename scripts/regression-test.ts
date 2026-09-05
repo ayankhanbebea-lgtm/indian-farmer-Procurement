@@ -26,7 +26,7 @@ async function runRegressionTests() {
   // TEST 8: AUTHENTICATION & SECURITY
   // ----------------------------------------------------
   console.log("[TEST 8] Testing Authentication, Passwordless OTP Hashing & JWT Session...");
-  const testPhone = "9200000001";
+  const testPhone = "9829124370";
   const otpCode = generateCryptographicOtp();
   if (!/^\d{6}$/.test(otpCode)) throw new Error("OTP must be 6 digits");
   const hashed = hashOtp(otpCode, testPhone);
@@ -251,3 +251,4 @@ runRegressionTests().catch((err) => {
   console.error("\n? REGRESSION TEST FAILED:", err);
   process.exit(1);
 });
+

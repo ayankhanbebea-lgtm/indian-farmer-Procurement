@@ -87,42 +87,50 @@ function ensureBaselineData(db: DatabaseSync) {
     const adminId = newId("usr_");
     db.prepare(`INSERT OR IGNORE INTO users (id, phone, role, name, language, created_at, updated_at, active) VALUES (?, ?, 'ADMIN', ?, 'en', ?, ?, 1)`).run(
       adminId,
-      "9000000001",
+      "9258879190",
       "Administrator",
       nowIso(),
       nowIso()
     );
 
     // 4. Staff Accounts
-    const staffNames = ["Suresh Sharma", "Anita Verma", "Mohit Yadav"];
-    let staffPhoneSeq = 9100000001;
-    for (let i = 0; i < centreDefs.length; i++) {
+    const staffAccounts = [
+      { name: "Suresh Sharma", phone: "9509082087", code: "JPR01" },
+      { name: "Anita Verma", phone: "7870844405", code: "JPR02" },
+      { name: "Mohit Yadav", phone: "7015962317", code: "JPR03" },
+    ];
+    for (const staff of staffAccounts) {
       const uid = newId("usr_");
       db.prepare(`INSERT OR IGNORE INTO users (id, phone, role, name, language, created_at, updated_at, active) VALUES (?, ?, 'STAFF', ?, 'en', ?, ?, 1)`).run(
         uid,
-        String(staffPhoneSeq++),
-        staffNames[i],
+        staff.phone,
+        staff.name,
         nowIso(),
         nowIso()
       );
-      db.prepare(`INSERT OR IGNORE INTO centre_staff (id, user_id, centre_id) VALUES (?, ?, ?)`).run(
-        newId("cst_"),
-        uid,
-        centreIds[centreDefs[i].code]
-      );
+      if (centreIds[staff.code]) {
+        db.prepare(`INSERT OR IGNORE INTO centre_staff (id, user_id, centre_id) VALUES (?, ?, ?)`).run(
+          newId("cst_"),
+          uid,
+          centreIds[staff.code]
+        );
+      }
     }
 
-    // 5. Default Farmers
+    // 5. Default Farmers (First farmer Ramesh Kumar with phone 9829124370)
     const farmerNames = [
       "Ramesh Kumar", "Suman Devi", "Kailash Chand", "Geeta Bai", "Om Prakash",
       "Lakshmi Nagar", "Hari Singh", "Radha Kumari", "Devendra Choudhary", "Kamla Meena"
     ];
-    let farmerPhoneSeq = 9200000001;
+    const farmerPhones = [
+      "9829124370", "9200000002", "9200000003", "9200000004", "9200000005",
+      "9200000006", "9200000007", "9200000008", "9200000009", "9200000010"
+    ];
     for (let i = 0; i < farmerNames.length; i++) {
       const uid = newId("usr_");
       db.prepare(`INSERT OR IGNORE INTO users (id, phone, role, name, language, created_at, updated_at, active) VALUES (?, ?, 'FARMER', ?, 'en', ?, ?, 1)`).run(
         uid,
-        String(farmerPhoneSeq++),
+        farmerPhones[i],
         farmerNames[i],
         nowIso(),
         nowIso()

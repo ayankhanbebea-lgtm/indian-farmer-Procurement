@@ -308,27 +308,27 @@ export default function LoginPage() {
               <p className="text-xs text-ink-faint text-center font-medium">{t("quickDemoAccounts")}</p>
               <div className="mt-2 space-y-1.5 text-xs text-ink-soft">
                 <div className="grid grid-cols-2 gap-1.5">
-                  <button onClick={() => setPhone("9200000001")} className="text-left px-2 py-1 rounded bg-surface/60 hover:bg-surface transition-colors">
-                    <span className="font-semibold text-brand-700">Farmer</span> · 9200000001
+                  <button onClick={() => setPhone("9829124370")} className="text-left px-2 py-1 rounded bg-surface/60 hover:bg-surface transition-colors">
+                    <span className="font-semibold text-brand-700">Farmer</span> · 9829124370
                   </button>
-                  <button onClick={() => setPhone("9000000001")} className="text-left px-2 py-1 rounded bg-surface/60 hover:bg-surface transition-colors">
-                    <span className="font-semibold text-brand-700">Admin</span> · 9000000001
+                  <button onClick={() => setPhone("9258879190")} className="text-left px-2 py-1 rounded bg-surface/60 hover:bg-surface transition-colors">
+                    <span className="font-semibold text-brand-700">Admin</span> · 9258879190
                   </button>
                 </div>
                 <div className="border-t border-line/40 pt-1 text-[11px] text-ink-faint">
                   <p className="font-medium text-ink-soft mb-1">Staff Accounts by Mandi Centre:</p>
                   <div className="grid grid-cols-1 gap-1">
-                    <button onClick={() => setPhone("9100000001")} className="text-left px-2 py-0.5 rounded hover:bg-surface transition-colors flex justify-between">
+                    <button onClick={() => setPhone("9509082087")} className="text-left px-2 py-0.5 rounded hover:bg-surface transition-colors flex justify-between">
                       <span><strong>Centre 01 (Sitapura)</strong>: Suresh</span>
-                      <span className="font-mono text-brand-700">9100000001</span>
+                      <span className="font-mono text-brand-700">9509082087</span>
                     </button>
-                    <button onClick={() => setPhone("9100000002")} className="text-left px-2 py-0.5 rounded hover:bg-surface transition-colors flex justify-between">
+                    <button onClick={() => setPhone("7870844405")} className="text-left px-2 py-0.5 rounded hover:bg-surface transition-colors flex justify-between">
                       <span><strong>Centre 02 (Sanganer)</strong>: Anita</span>
-                      <span className="font-mono text-brand-700">9100000002</span>
+                      <span className="font-mono text-brand-700">7870844405</span>
                     </button>
-                    <button onClick={() => setPhone("9100000003")} className="text-left px-2 py-0.5 rounded hover:bg-surface transition-colors flex justify-between">
+                    <button onClick={() => setPhone("7015962317")} className="text-left px-2 py-0.5 rounded hover:bg-surface transition-colors flex justify-between">
                       <span><strong>Centre 03 (Chaksu)</strong>: Mohit</span>
-                      <span className="font-mono text-brand-700">9100000003</span>
+                      <span className="font-mono text-brand-700">7015962317</span>
                     </button>
                   </div>
                 </div>
