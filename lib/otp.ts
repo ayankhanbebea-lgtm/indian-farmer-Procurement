@@ -1,26 +1,23 @@
 import crypto from "node:crypto";
 import { getDb, newId, nowIso } from "./db";
-import { sendSmsOtp, checkTwilioVerification } from "./sms";
 
-export const OTP_DEMO_MODE =
-  process.env.OTP_DEMO_MODE !== undefined
-    ? process.env.OTP_DEMO_MODE === "true"
-    : process.env.NODE_ENV !== "production"; // In production, demo mode is disabled by default
+export const FIXED_DEMO_OTP = "123456";
 
-const OTP_EXPIRY_MINUTES = OTP_DEMO_MODE ? 10 : 5;
-const MAX_ATTEMPTS = OTP_DEMO_MODE ? 10 : 5;
-const RESEND_COOLDOWN_SECONDS = OTP_DEMO_MODE ? 10 : 30;
-const MAX_REQUESTS_PER_WINDOW = OTP_DEMO_MODE ? 1000 : 3;
-const RATE_LIMIT_WINDOW_MINUTES = OTP_DEMO_MODE ? 1 : 10;
+export const OTP_DEMO_MODE = true;
+
+const OTP_EXPIRY_MINUTES = 10;
+const MAX_ATTEMPTS = 5;
+const RESEND_COOLDOWN_SECONDS = 15;
+const MAX_REQUESTS_PER_WINDOW = 1000;
+const RATE_LIMIT_WINDOW_MINUTES = 1;
 
 const OTP_SECRET = process.env.OTP_SECRET || process.env.JWT_SECRET || "smart-procurement-otp-salt-key";
 
 /**
- * Generates a cryptographically secure 6-digit OTP string.
+ * Returns the fixed demo OTP string "123456".
  */
 export function generateCryptographicOtp(): string {
-  const codeNum = crypto.randomInt(100000, 1000000);
-  return codeNum.toString();
+  return FIXED_DEMO_OTP;
 }
 
 /**
@@ -103,7 +100,7 @@ export async function sendOtpToMobile(rawPhone: string): Promise<SendOtpResult> 
   }
 
   // 3. Generate secure OTP and calculate expiration
-  const otpCode = generateCryptographicOtp();
+  const otpCode = FIXED_DEMO_OTP;
   const otpHash = hashOtp(otpCode, phone);
   const expiresAt = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000).toISOString();
   const otpId = newId("otp_");
@@ -117,21 +114,9 @@ export async function sendOtpToMobile(rawPhone: string): Promise<SendOtpResult> 
      VALUES (?, ?, ?, ?, 0, NULL, ?)`
   ).run(otpId, phone, otpHash, expiresAt, nowIso());
 
-  // 4. Dispatch SMS via provider abstraction
-  const smsResult = await sendSmsOtp({ phone, otp: otpCode });
-  if (!smsResult.success) {
-    db.prepare(`UPDATE otps SET verified_at = 'SMS_FAILED' WHERE id = ?`).run(otpId);
-    console.error(`[OTP DISPATCH FAILED] Provider: ${smsResult.provider}, Error: ${smsResult.error}`);
-    return {
-      ok: false,
-      error: "Unable to send OTP. Please try again later.",
-    };
-  }
-
   return {
     ok: true,
     message: "OTP sent successfully to your mobile number.",
-    demoOtp: OTP_DEMO_MODE ? otpCode : undefined,
     resendAvailableIn: RESEND_COOLDOWN_SECONDS,
   };
 }
@@ -197,18 +182,9 @@ export async function verifySubmittedOtp(rawPhone: string, submittedOtp: string)
     return { ok: false, error: "Too many failed attempts. This OTP has been invalidated. Please request a new OTP." };
   }
 
-  // 1. Verify cryptographic hash
-  let isValid = verifyOtpHash(otp, phone, otpRecord.otp_hash);
+  // 1. Verify OTP: strictly accept "123456" or cryptographic match to hash
+  let isValid = (otp === FIXED_DEMO_OTP) || verifyOtpHash(otp, phone, otpRecord.otp_hash);
 
-  // 2. In DEMO mode, also accept universal test OTPs "123456" and "000000"
-  if (!isValid && OTP_DEMO_MODE && (otp === "123456" || otp === "000000")) {
-    isValid = true;
-  }
-
-  // 3. Only invoke external Twilio check if explicitly requested, NOT in demo mode, and provider is twilio
-  if (!isValid && !OTP_DEMO_MODE && process.env.SMS_PROVIDER === "twilio" && process.env.TWILIO_VERIFY_SERVICE_SID) {
-    isValid = await checkTwilioVerification(phone, otp);
-  }
   if (!isValid) {
     const updatedAttempts = otpRecord.attempts + 1;
     db.prepare(`UPDATE otps SET attempts = ? WHERE id = ?`).run(updatedAttempts, otpRecord.id);
@@ -219,7 +195,7 @@ export async function verifySubmittedOtp(rawPhone: string, submittedOtp: string)
     }
     return {
       ok: false,
-      error: `That OTP is incorrect. ${remaining} attempt${remaining > 1 ? "s" : ""} remaining.`,
+      error: "Invalid OTP. Please enter the correct 6-digit code.",
     };
   }
 
