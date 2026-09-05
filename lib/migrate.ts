@@ -34,6 +34,11 @@ export function runMigrations(db: DatabaseSync) {
     db.exec(`ALTER TABLE crops ADD COLUMN msp_rate REAL NOT NULL DEFAULT 2275`);
   } catch {}
 
+  // Rename existing Kharif Pulses (PLS) to Soybean (SOY) if present
+  try {
+    db.prepare(`UPDATE crops SET name = 'Soybean', code = 'SOY', msp_rate = 4892 WHERE code = 'PLS' OR name = 'Kharif Pulses'`).run();
+  } catch {}
+
   // Ensure all standard crops exist with updated MSP rates
   const standardCrops = [
     { name: "Wheat", code: "WHT", msp_rate: 2275 },
@@ -43,7 +48,7 @@ export function runMigrations(db: DatabaseSync) {
     { name: "Maize", code: "MAZ", msp_rate: 2090 },
     { name: "Gram", code: "GRM", msp_rate: 5440 },
     { name: "Groundnut", code: "GND", msp_rate: 6783 },
-    { name: "Kharif Pulses", code: "PLS", msp_rate: 7550 },
+    { name: "Soybean", code: "SOY", msp_rate: 4892 },
     { name: "Barley", code: "BAR", msp_rate: 1850 },
   ];
 

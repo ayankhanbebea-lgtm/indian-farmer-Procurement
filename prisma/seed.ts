@@ -33,7 +33,7 @@ async function main() {
     { name: "Maize", code: "MAZ", msp_rate: 2090 },
     { name: "Gram", code: "GRM", msp_rate: 5440 },
     { name: "Groundnut", code: "GND", msp_rate: 6783 },
-    { name: "Kharif Pulses", code: "PLS", msp_rate: 7550 },
+    { name: "Soybean", code: "SOY", msp_rate: 4892 },
     { name: "Barley", code: "BAR", msp_rate: 1850 },
   ];
   for (const c of crops) {
