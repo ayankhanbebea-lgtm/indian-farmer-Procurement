@@ -5,7 +5,7 @@ import { sendSmsOtp, checkTwilioVerification } from "./sms";
 export const OTP_DEMO_MODE =
   process.env.OTP_DEMO_MODE !== undefined
     ? process.env.OTP_DEMO_MODE === "true"
-    : true; // Default to demo mode for smooth hackathon testing unless explicitly set to "false"
+    : process.env.NODE_ENV !== "production"; // In production, demo mode is disabled by default
 
 const OTP_EXPIRY_MINUTES = OTP_DEMO_MODE ? 10 : 5;
 const MAX_ATTEMPTS = OTP_DEMO_MODE ? 10 : 5;
@@ -121,7 +121,11 @@ export async function sendOtpToMobile(rawPhone: string): Promise<SendOtpResult> 
   const smsResult = await sendSmsOtp({ phone, otp: otpCode });
   if (!smsResult.success) {
     db.prepare(`UPDATE otps SET verified_at = 'SMS_FAILED' WHERE id = ?`).run(otpId);
-    return { ok: false, error: smsResult.error || "Unable to send SMS. Please check provider configuration." };
+    console.error(`[OTP DISPATCH FAILED] Provider: ${smsResult.provider}, Error: ${smsResult.error}`);
+    return {
+      ok: false,
+      error: "Unable to send OTP. Please try again later.",
+    };
   }
 
   return {

@@ -24,7 +24,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       ok: true,
       message: result.message,
-      demoOtp: result.demoOtp,
       resendAvailableIn: result.resendAvailableIn,
     });
   } catch (err: any) {

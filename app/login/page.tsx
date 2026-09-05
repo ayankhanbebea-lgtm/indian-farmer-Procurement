@@ -12,9 +12,6 @@ import {
   User,
   MapPin,
   Globe,
-  Terminal,
-  Copy,
-  Check,
 } from "lucide-react";
 import { useLanguage } from "@/lib/i18n/context";
 import LanguageSelector from "@/components/LanguageSelector";
@@ -44,12 +41,7 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [resendCooldown, setResendCooldown] = useState(0);
 
-  // Dev mode OTP display
-  const [devOtp, setDevOtp] = useState<string | null>(null);
-  const [devOtpCopied, setDevOtpCopied] = useState(false);
-
   const otpInputRef = useRef<HTMLInputElement>(null);
-  const isDev = process.env.NODE_ENV !== "production";
 
   // Timer countdown for resend OTP cooldown
   useEffect(() => {
@@ -69,25 +61,10 @@ export default function LoginPage() {
 
   const cleanPhone = phone.replace(/\D/g, "").slice(-10);
 
-  // Fetch dev OTP after sending in development mode
-  async function fetchDevOtp(ph: string) {
-    if (!isDev) return;
-    try {
-      const res = await fetch(`/api/auth/dev-otp?phone=${ph}`);
-      if (res.ok) {
-        const data = await res.json();
-        if (data.otp) setDevOtp(data.otp);
-      }
-    } catch {
-      // best-effort
-    }
-  }
-
   // Step 1: Send OTP
   async function handleSendOtp(e?: React.FormEvent) {
     if (e) e.preventDefault();
     setError("");
-    setDevOtp(null);
 
     if (!/^[6-9]\d{9}$/.test(cleanPhone)) {
       setError("Please enter a valid 10-digit Indian mobile number starting with 6-9.");
@@ -109,14 +86,9 @@ export default function LoginPage() {
         }
         return;
       }
-      setResendCooldown(data.resendAvailableIn || 10);
+      setResendCooldown(data.resendAvailableIn || 30);
       setStep("otp");
       setOtp("");
-      if (data.demoOtp) {
-        setDevOtp(data.demoOtp);
-      } else {
-        await fetchDevOtp(cleanPhone);
-      }
     } catch {
       setError("Unable to connect to authentication server. Please try again.");
     } finally {
@@ -216,13 +188,6 @@ export default function LoginPage() {
     return `${raw.slice(0, 5)} ${raw.slice(5)}`;
   }
 
-  async function copyDevOtp() {
-    if (!devOtp) return;
-    await navigator.clipboard.writeText(devOtp).catch(() => {});
-    setDevOtpCopied(true);
-    setTimeout(() => setDevOtpCopied(false), 1500);
-  }
-
   return (
     <main className="min-h-screen flex items-center justify-center px-4 bg-surface py-8">
       <div className="w-full max-w-sm">
@@ -242,7 +207,6 @@ export default function LoginPage() {
               type="button"
               onClick={() => {
                 setError("");
-                setDevOtp(null);
                 setStep("phone");
               }}
               className="inline-flex items-center gap-1 text-sm text-ink-faint hover:text-ink transition-colors py-1 pr-2 -ml-1 rounded-md"
@@ -350,24 +314,6 @@ export default function LoginPage() {
                 <strong className="text-ink font-semibold tnum">+91 {formatPhoneDisplay(cleanPhone)}</strong>
               </p>
             </div>
-
-            {/* Dev / Demo mode OTP banner */}
-            {devOtp && (
-              <div className="flex items-center justify-between gap-2 px-3 py-2.5 rounded-lg bg-amber-50 border border-amber-200">
-                <div className="flex items-center gap-2">
-                  <Terminal size={14} className="text-amber-600 shrink-0" />
-                  <span className="text-xs text-amber-700 font-medium">{t("devOtp")}:</span>
-                  <span className="font-mono font-bold text-sm text-amber-900 tnum">{devOtp}</span>
-                </div>
-                <button
-                  onClick={copyDevOtp}
-                  className="text-amber-600 hover:text-amber-800 transition-colors p-1 rounded"
-                  title="Copy OTP"
-                >
-                  {devOtpCopied ? <Check size={14} /> : <Copy size={14} />}
-                </button>
-              </div>
-            )}
 
             {error && <p className="text-sm text-error bg-error/5 rounded-lg px-3 py-2 text-center">{error}</p>}
 

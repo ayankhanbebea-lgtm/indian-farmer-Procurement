@@ -30,16 +30,21 @@ if (!global.__devLastOtp) {
  * Sends an OTP SMS using the configured SMS provider.
  */
 export async function sendSmsOtp({ phone, otp, templateId }: SendSmsOptions): Promise<SendSmsResult> {
-  const isDemoMode = process.env.OTP_DEMO_MODE !== undefined ? process.env.OTP_DEMO_MODE === "true" : true;
-  const provider = (process.env.SMS_PROVIDER || "dev").toLowerCase();
+  const isDemoMode =
+    process.env.OTP_DEMO_MODE !== undefined
+      ? process.env.OTP_DEMO_MODE === "true"
+      : process.env.NODE_ENV !== "production";
+  const provider = (process.env.SMS_PROVIDER || (isDemoMode ? "dev" : "twilio")).toLowerCase();
   const formattedPhone = phone.startsWith("+91") ? phone : `+91${phone.replace(/^0+/, "")}`;
   const raw10Digit = phone.replace(/^\+91/, "").replace(/^0+/, "");
 
   // GUARANTEED DEMO / DEV SHORT-CIRCUIT:
-  // When OTP_DEMO_MODE is true OR SMS_PROVIDER is 'dev' or 'mock', NEVER call external SMS APIs!
-  if (isDemoMode || provider === "dev" || provider === "mock") {
+  // ONLY if demo mode is explicitly enabled or provider is dev/mock:
+  if (isDemoMode && (provider === "dev" || provider === "mock")) {
     global.__devLastOtp![raw10Digit] = otp;
-    console.log(`[DEMO SMS GATEWAY] Simulated SMS for +91-${raw10Digit} with OTP: ${otp} (Demo mode active - no external SMS called)`);
+    if (process.env.NODE_ENV !== "production") {
+      console.log(`[DEMO SMS GATEWAY] Simulated SMS for +91-${raw10Digit} (Demo mode active)`);
+    }
     return { success: true, provider: "dev-demo", messageId: `demo_${Date.now()}` };
   }
 
@@ -123,34 +128,22 @@ export async function sendSmsOtp({ phone, otp, templateId }: SendSmsOptions): Pr
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok || data.status === "failed" || data.error_code) {
-          console.warn("[SMS Twilio Verify Notice]", data.message || "Twilio delivery limited in trial mode");
-          if (process.env.NODE_ENV !== "production") {
-            global.__devLastOtp![raw10Digit] = otp;
-            console.log(`\x1b[36m[DEV SMS GATEWAY] OTP for +91-${raw10Digit}: \x1b[1m\x1b[32m${otp}\x1b[0m\x1b[36m (expires in 5 mins)\x1b[0m`);
-            return { success: true, provider: "dev-fallback", messageId: `dev_${Date.now()}` };
-          }
+          console.warn("[SMS Twilio Verify Error]", data.message || `Status: ${data.status}`);
           return { success: false, provider: "twilio", error: data.message || "Twilio Verify dispatch failed" };
         }
-        global.__devLastOtp![raw10Digit] = otp;
+        if (process.env.NODE_ENV !== "production") {
+          global.__devLastOtp![raw10Digit] = otp;
+        }
         console.log(`[SMS TWILIO VERIFY SUCCESS] OTP SMS dispatched to ${formattedPhone}. SID: ${data.sid}`);
         return { success: true, provider: "twilio-verify", messageId: data.sid };
       } catch (err: any) {
-        if (process.env.NODE_ENV !== "production") {
-          global.__devLastOtp![raw10Digit] = otp;
-          console.log(`\x1b[36m[DEV SMS GATEWAY] OTP for +91-${raw10Digit}: \x1b[1m\x1b[32m${otp}\x1b[0m\x1b[36m (expires in 5 mins)\x1b[0m`);
-          return { success: true, provider: "dev-fallback", messageId: `dev_${Date.now()}` };
-        }
+        console.error("[SMS Twilio Verify Exception]", err?.message);
         return { success: false, provider: "twilio-verify", error: err?.message || "Twilio network failure" };
       }
     }
 
     // Option B: Standard Twilio Programmable SMS
     if (!fromNumber) {
-      if (process.env.NODE_ENV !== "production") {
-        global.__devLastOtp![raw10Digit] = otp;
-        console.log(`\x1b[36m[DEV SMS GATEWAY] OTP for +91-${raw10Digit}: \x1b[1m\x1b[32m${otp}\x1b[0m\x1b[36m (expires in 5 mins)\x1b[0m`);
-        return { success: true, provider: "dev-fallback", messageId: `dev_${Date.now()}` };
-      }
       return { success: false, provider: "twilio", error: "Missing TWILIO_PHONE_NUMBER or TWILIO_VERIFY_SERVICE_SID" };
     }
 
@@ -171,21 +164,16 @@ export async function sendSmsOtp({ phone, otp, templateId }: SendSmsOptions): Pr
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || data.error_code) {
-        if (process.env.NODE_ENV !== "production") {
-          global.__devLastOtp![raw10Digit] = otp;
-          console.log(`\x1b[36m[DEV SMS GATEWAY] OTP for +91-${raw10Digit}: \x1b[1m\x1b[32m${otp}\x1b[0m\x1b[36m (expires in 5 mins)\x1b[0m`);
-          return { success: true, provider: "dev-fallback", messageId: `dev_${Date.now()}` };
-        }
+        console.error("[SMS Twilio Error]", data.message || `Code: ${data.error_code}`);
         return { success: false, provider: "twilio", error: data.message || "Failed to deliver SMS via Twilio" };
       }
-      global.__devLastOtp![raw10Digit] = otp;
-      return { success: true, provider: "twilio", messageId: data.sid };
-    } catch (err: any) {
       if (process.env.NODE_ENV !== "production") {
         global.__devLastOtp![raw10Digit] = otp;
-        console.log(`\x1b[36m[DEV SMS GATEWAY] OTP for +91-${raw10Digit}: \x1b[1m\x1b[32m${otp}\x1b[0m\x1b[36m (expires in 5 mins)\x1b[0m`);
-        return { success: true, provider: "dev-fallback", messageId: `dev_${Date.now()}` };
       }
+      console.log(`[SMS TWILIO SUCCESS] Message dispatched to ${formattedPhone}. SID: ${data.sid}`);
+      return { success: true, provider: "twilio", messageId: data.sid };
+    } catch (err: any) {
+      console.error("[SMS Twilio Exception]", err?.message);
       return { success: false, provider: "twilio", error: err?.message || "Twilio network failure" };
     }
   }
@@ -229,17 +217,17 @@ export async function sendSmsOtp({ phone, otp, templateId }: SendSmsOptions): Pr
   }
 
   // 4. Development / Mock Mode (Isolated)
-  // Used in local development or test suites when real SMS gateways are not yet configured.
-  if (process.env.NODE_ENV !== "production" || provider === "dev" || provider === "mock") {
+  // Used in local development or test suites only when explicitly configured
+  if (process.env.NODE_ENV !== "production" && (isDemoMode || provider === "dev" || provider === "mock")) {
     global.__devLastOtp![raw10Digit] = otp;
-    console.log(`\x1b[36m[DEV SMS GATEWAY] OTP for +91-${raw10Digit}: \x1b[1m\x1b[32m${otp}\x1b[0m\x1b[36m (expires in 5 mins)\x1b[0m`);
+    console.log(`[DEV SMS GATEWAY] Simulated OTP for +91-${raw10Digit} (expires in 5 mins)`);
     return { success: true, provider: "dev-mock", messageId: `dev_${Date.now()}` };
   }
 
   return {
     success: false,
-    provider: "unknown",
-    error: "No SMS provider configured for production. Please configure MSG91, Twilio, or Exotel.",
+    provider: provider || "unknown",
+    error: `SMS provider '${provider}' delivery failed or provider unconfigured.`,
   };
 }
 
